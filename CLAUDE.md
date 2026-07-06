@@ -28,21 +28,20 @@ my-skills/              ← vlong 包根目录
 ## 安装方式
 
 ```bash
-# 安装全部 skill（本地，符号链接）
-./install.sh
+# 安装全部 skill
+curl -fsSL https://raw.githubusercontent.com/steedjson/my-skills/main/install.sh | bash
 
 # 安装指定 skill
-./install.sh route-effort
+curl -fsSL .../install.sh | bash -s -- route-effort
 
 # 带训练支持
-./install.sh route-effort --with-skill-opt
+curl -fsSL .../install.sh | bash -s -- route-effort --with-skill-opt
 
-# 远程一键安装
-curl -fsSL https://raw.githubusercontent.com/steedjson/my-skills/main/install.sh | bash
+# 或直接用 skill 的入口
+curl -fsSL .../route-effort/install.sh | bash
 ```
 
-本地安装创建符号链接：`~/.claude/skills/route-effort → 项目/route-effort/`
-`git pull` 后 skill 立即生效，无需重新安装。
+升级：重新运行安装命令，覆盖安装即可。
 
 ## 新增 skill 规范
 
