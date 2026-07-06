@@ -8,11 +8,15 @@ import sys
 import datetime
 from pathlib import Path
 
-LOG_FILE = Path.home() / ".skill-opt" / "route-effort" / "route-effort-usage.jsonl"
+SKILL_DIR = Path.home() / ".claude" / "skills" / "route-effort"
+SKILL_OPT_DIR = SKILL_DIR / "skill-opt"
+LOG_FILE = SKILL_OPT_DIR / "route-effort-usage.jsonl"
 
 def main():
-    # 确保日志目录存在
-    LOG_FILE.parent.mkdir(exist_ok=True)
+    # 只有安装了 --with-skill-opt 时才记录
+    # 默认纯 skill 安装不创建 skill-opt/，因此静默跳过
+    if not SKILL_OPT_DIR.exists():
+        return
 
     # 解析 hook 传入的参数
     tool_input = sys.argv[1] if len(sys.argv) > 1 else "{}"
@@ -41,6 +45,6 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         # 静默失败，不打断主流程
-        error_log = Path.home() / ".skill-opt" / "route-effort" / "log-errors.txt"
+        error_log = SKILL_OPT_DIR / "log-errors.txt"
         with open(error_log, "a") as f:
             f.write(f"{datetime.datetime.utcnow().isoformat()}: {e}\n")

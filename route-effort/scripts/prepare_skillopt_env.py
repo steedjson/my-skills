@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """SkillOpt 环境准备脚本。
 
-在 ~/SkillOpt/envs/route-effort/ 下创建：
+在 ~/.claude/skills/route-effort/skill-opt/ 下创建：
 - dataloader.py
 - rollout.py
 - initial.md
@@ -10,8 +10,9 @@ import os
 from pathlib import Path
 import shutil
 
-SKILLOPT_ENV = Path.home() / ".skill-opt" / "route-effort"
-SKILL_PATH = Path(__file__).parent.parent / "SKILL.md"
+SKILL_DIR = Path.home() / ".claude" / "skills" / "route-effort"
+SKILLOPT_ENV = SKILL_DIR / "skill-opt"
+SKILL_PATH = SKILL_DIR / "SKILL.md"
 
 def create_initial_md():
     """复制当前 SKILL.md 作为 initial.md"""
