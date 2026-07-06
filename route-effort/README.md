@@ -2,7 +2,7 @@
 
 > Claude Code skill — 根据任务描述自动路由到合适的 agent `effort` 级别（`low`/`medium`/`high`/`xhigh`/`max`）。
 
-**当前版本：1.4.0**
+**当前版本：2.0.0**
 
 ---
 
