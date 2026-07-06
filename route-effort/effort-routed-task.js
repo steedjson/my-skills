@@ -7,34 +7,45 @@ export const meta = {
   ],
 };
 
-/**
- * 调用 route-effort skill 获取推荐的 effort 级别。
- * 路由本身用 low effort —— 无需推理，节省 token。
- */
-async function routeEffort(taskDesc) {
-  phase('Route');
-  const result = await agent(
+const DEFAULT_TASK = '跨模块变更：修改公共缓存层，评估对各服务模块的影响范围';
+
+// args?.task ?? DEFAULT_TASK：空字符串视为有效输入（非 falsy 替换）
+const taskDesc = args?.task ?? DEFAULT_TASK;
+
+// ── Phase 1: 路由 ──────────────────────────────────────────────
+phase('Route');
+
+let effort = 'medium';
+try {
+  const routeResult = await agent(
     `按照 route-effort skill 的规则，评估以下任务应使用哪个 effort 级别。\n` +
-    `只返回 effort=<level>，level 取值：low/medium/high/xhigh/max，不要其他内容。\n\n` +
-    `任务：${taskDesc}`,
-    { effort: 'medium', label: `route: ${taskDesc.slice(0, 40)}` }  // medium：low 会系统性低估复杂任务
+    `只返回 effort=<level>，level 取值：low/medium/high/xhigh/max，不要其他内容。\n` +
+    `---\n${taskDesc}\n---`,
+    { effort: 'medium', label: `route: ${taskDesc.slice(0, 40)}` }
   );
-  const match = (result || '').match(/effort=(low|medium|high|xhigh|max)/);
-  return match ? match[1] : 'medium';
+  const match = (routeResult || '').match(/effort=(low|medium|high|xhigh|max)/);
+  if (match) {
+    effort = match[1];
+  } else {
+    log('WARN: route agent 返回格式异常，降级到 medium');
+  }
+} catch (e) {
+  log(`WARN: route agent 调用失败（${e?.message ?? e}），降级到 medium`);
 }
 
-// ── 主流程 ────────────────────────────────────────────────────
-// args 示例：{ task: "跨模块变更：修改认证中间件，评估影响范围" }
-// 未传 args 时使用默认示例任务
-const taskDesc = (args && args.task) ? args.task : '跨模块变更：修改公共缓存层，评估对各服务模块的影响范围';
-
-const effort = await routeEffort(taskDesc);
 log(`路由结果：effort=${effort}`);
 
+// ── Phase 2: 执行 ──────────────────────────────────────────────
 phase('Execute');
-const result = await agent(taskDesc, {
-  effort,
-  label: `execute [${effort}]: ${taskDesc.slice(0, 40)}`,
-});
+
+try {
+  await agent(taskDesc, {
+    effort,
+    label: `execute [${effort}]: ${taskDesc.slice(0, 40)}`,
+  });
+} catch (e) {
+  log(`ERROR: execute agent 调用失败（${e?.message ?? e}）`);
+  throw e;
+}
 
 log(`任务完成，使用 effort=${effort}`);

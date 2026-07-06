@@ -2,15 +2,16 @@
 # route-effort skill 安装脚本
 # 支持两种方式：
 #   本地：./install.sh
-#   远程：curl -fsSL https://raw.githubusercontent.com/<user>/route-effort/main/install.sh | bash
+#   远程：curl -fsSL https://raw.githubusercontent.com/steedjson/my-skills/main/route-effort/install.sh | bash
 
-set -e
+set -euo pipefail
 
-REPO_RAW="https://raw.githubusercontent.com/YOUR_USERNAME/route-effort/main"
+VERSION="1.1.0"
+REPO_RAW="https://raw.githubusercontent.com/steedjson/my-skills/main/route-effort"
 SKILL_DIR="$HOME/.claude/skills/route-effort"
 WORKFLOW_DIR="$HOME/.claude/workflows"
 
-echo "=== Route-Effort Skill 安装程序 ==="
+echo "=== Route-Effort Skill 安装程序 v${VERSION} ==="
 
 # 检测运行方式（本地 or 远程 curl）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-/dev/stdin}")" 2>/dev/null && pwd || echo "")"
@@ -31,8 +32,14 @@ fetch_file() {
   fi
 }
 
+# 幂等检查：若已安装则显示当前版本
+if [ -f "$SKILL_DIR/SKILL.md" ]; then
+  INSTALLED_VER=$(grep '^version:' "$SKILL_DIR/SKILL.md" 2>/dev/null | awk '{print $2}' || echo "unknown")
+  echo "已检测到已安装版本：v${INSTALLED_VER}，将升级至 v${VERSION}"
+fi
+
 echo "📦 安装目标："
-echo "  Skill  → $SKILL_DIR/SKILL.md"
+echo "  Skill    → $SKILL_DIR/SKILL.md"
 echo "  Workflow → $WORKFLOW_DIR/effort-routed-task.js"
 echo
 
@@ -42,7 +49,7 @@ fetch_file "SKILL.md" "$SKILL_DIR/SKILL.md"
 fetch_file "effort-routed-task.js" "$WORKFLOW_DIR/effort-routed-task.js"
 
 echo
-echo "✅ 安装完成！"
+echo "✅ 安装完成！v${VERSION}"
 echo
 echo "使用方式："
 echo "  Workflow({"
@@ -50,4 +57,7 @@ echo "    scriptPath: '$WORKFLOW_DIR/effort-routed-task.js',"
 echo "    args: {task: '你的任务描述'}"
 echo "  })"
 echo
-echo "详细文档：$REPO_RAW/README.md"
+echo "手动指定 effort（绕过路由）："
+echo "  args: {task: '...', effort: 'xhigh'}"
+echo
+echo "详细文档：$REPO_RAW/SKILL.md"
