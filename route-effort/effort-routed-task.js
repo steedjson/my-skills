@@ -1,25 +1,35 @@
 export const meta = {
   name: 'effort-routed-task',
-  description: '根据任务描述自动路由到合适的 agent effort 级别，再派遣执行 agent。支持手动 override。',
+  description: '根据任务描述自动路由到合适的 agent effort 级别和模型，再派遣执行 agent。支持手动 override。',
   phases: [
-    { title: 'Route', detail: '调用 route-effort skill 决定 effort 级别' },
+    { title: 'Route', detail: '调用 route-effort skill 决定 effort 级别和模型' },
     { title: 'Execute', detail: '用路由结果派遣执行 agent' },
   ],
 };
 
 const DEFAULT_TASK = '跨模块变更：修改公共缓存层，评估对各服务模块的影响范围';
 const VALID_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+const VALID_MODELS = ['haiku', 'sonnet', 'fable', 'opus'];
 
-// args?.task ?? DEFAULT_TASK：空字符串视为有效输入（非 falsy 替换）
+// effort → 默认模型映射
+const EFFORT_MODEL_MAP = {
+  low:    'haiku',   // claude-haiku-4-5：机械任务，速度优先
+  medium: 'sonnet',  // claude-sonnet-5：日常任务，能力/成本平衡
+  high:   'sonnet',  // claude-sonnet-5：多文件开发，sonnet 足够
+  xhigh:  'fable',   // claude-fable-5：跨模块深度分析
+  max:    'fable',   // claude-fable-5：安全审计/并发/正确性极限
+};
+
 const taskDesc = args?.task ?? DEFAULT_TASK;
 const overrideEffort = args?.effort;
+const overrideModel  = args?.model;
 
 // ── Phase 1: 路由 ──────────────────────────────────────────────
 phase('Route');
 
 let effort = 'medium';
 
-// 手动 override：传入有效的 effort 字段时跳过路由，零额外开销
+// effort 路由（手动 override 或自动判断）
 if (overrideEffort && VALID_EFFORTS.includes(overrideEffort)) {
   effort = overrideEffort;
   log(`手动 override：effort=${effort}（跳过路由）`);
@@ -45,7 +55,19 @@ if (overrideEffort && VALID_EFFORTS.includes(overrideEffort)) {
   }
 }
 
-log(`路由结果：effort=${effort}`);
+// 模型路由：先检查 override，再按 effort 自动映射
+let model;
+if (overrideModel && VALID_MODELS.includes(overrideModel)) {
+  model = overrideModel;
+  log(`手动 override：model=${model}（跳过模型映射）`);
+} else {
+  if (overrideModel) {
+    log(`WARN: 无效的 model override "${overrideModel}"，将使用自动映射`);
+  }
+  model = EFFORT_MODEL_MAP[effort];
+}
+
+log(`路由结果：effort=${effort}，model=${model}`);
 
 // ── Phase 2: 执行 ──────────────────────────────────────────────
 phase('Execute');
@@ -53,11 +75,12 @@ phase('Execute');
 try {
   await agent(taskDesc, {
     effort,
-    label: `execute [${effort}]: ${taskDesc.slice(0, 40)}`,
+    model,
+    label: `execute [${effort}/${model}]: ${taskDesc.slice(0, 40)}`,
   });
 } catch (e) {
   log(`ERROR: execute agent 调用失败（${e?.message ?? e}）`);
   throw e;
 }
 
-log(`任务完成，使用 effort=${effort}`);
+log(`任务完成，使用 effort=${effort}，model=${model}`);

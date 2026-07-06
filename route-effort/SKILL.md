@@ -1,19 +1,19 @@
 ---
 name: vlong:route-effort
-version: 2.1.0
+version: 2.2.0
 description: >
-  评估任务复杂度并路由到合适的 effort 级别（low / medium / high / xhigh / max）。
-  帮用户判断一个任务"该花多少力气"——从简单机械操作到高风险跨模块变更都能处理。
+  评估任务复杂度并路由到合适的 effort 级别（low/medium/high/xhigh/max）和模型（haiku/sonnet/fable）。
+  帮用户判断一个任务"该花多少力气、用什么模型"——从简单机械操作到高风险跨模块变更都能处理。
 
   以下场景应主动调用本 skill，即使用户没有说"effort"或"route-effort"这两个词：
   - 用户问任务难度、复杂度、工作量："这个任务有多复杂"、"要花多少精力"、"难不难"
   - 用户在判断该认真处理还是快速搞定："这个要仔细看吗"、"简单任务还是要深度分析"
   - 用户要给子 agent 或 Workflow 分配推理预算："这个任务给 xhigh 还是 high"
-  - 用户提到"route effort"、"effort 路由"、"任务难度评估"
-  - 构建 multi-agent 系统需要按复杂度分配算力
+  - 用户提到"route effort"、"effort 路由"、"任务难度评估"、"模型路由"、"用哪个模型"
+  - 构建 multi-agent 系统需要按复杂度分配算力和模型
   - 询问如何把 effort 路由规则嵌入 SDK 或 system prompt
 
-  只要用户在评估"这个任务值得投入多少推理资源"，就应调用。
+  只要用户在评估"这个任务值得投入多少推理资源"或"该用哪个模型"，就应调用。
 ---
 
 # Route Effort
@@ -25,7 +25,8 @@ description: >
 **1. 读取输入**
 从用户消息或 `args` 中提取：
 - `task`：任务描述（必须）
-- `effort`：手动 override（可选，存在时跳过路由）
+- `effort`：手动 override（可选，存在时跳过 effort 路由）
+- `model`：手动 override（可选，存在时跳过模型映射）
 
 **2. 路由判断**（无 override 时执行）
 对照下方路由规则表，沿决策树逐步判断，确定 effort 级别。
@@ -33,7 +34,7 @@ description: >
 
 **3. 输出路由结果**
 ```
-[路由] effort=<level> — <一句理由，说明命中哪条规则>
+[路由] effort=<level> model=<model> — <一句理由，说明命中哪条规则>
 ```
 
 **4. 执行任务**
@@ -46,27 +47,27 @@ description: >
 
 **5. 完成确认**
 ```
-[完成] effort=<level> 已使用
+[完成] effort=<level> model=<model> 已使用
 ```
 
 **完整示例（high 级别）：**
 ```
-[路由] effort=high — 涉及3个文件的功能开发，需要权衡接口设计方案
+[路由] effort=high model=sonnet — 涉及3个文件的功能开发，需要权衡接口设计方案
 
 [执行内容]
 ... （任务执行结果）
 
-[完成] effort=high 已使用
+[完成] effort=high model=sonnet 已使用
 ```
 
 **Override 示例（跳过路由）：**
 ```
-检测到 effort=max override，跳过路由判断。
+检测到 effort=max model=fable override，跳过路由判断。
 
 [执行内容]
-... （以 max 深度执行）
+... （以 max/fable 深度执行）
 
-[完成] effort=max 已使用
+[完成] effort=max model=fable 已使用
 ```
 
 ---
@@ -94,14 +95,31 @@ description: >
 以上不确定？                    → 上一级（保守）
 ```
 
+## 模型路由规则
+
+effort 确定后，按以下映射自动选择模型：
+
+| effort | 默认模型 | 理由 |
+|--------|----------|------|
+| `low` | `haiku` | 机械任务，速度/成本优先 |
+| `medium` | `sonnet` | 日常任务，能力与成本平衡 |
+| `high` | `sonnet` | 多文件开发，sonnet 足够胜任 |
+| `xhigh` | `fable` | 跨模块深度分析，需要最强推理 |
+| `max` | `fable` | 安全审计/并发/正确性极限，最强模型 |
+
+模型别名对应：`haiku` = claude-haiku-4-5，`sonnet` = claude-sonnet-5，`fable` = claude-fable-5
+
 ## 手动 Override
 
-用户明确指定 effort 时，跳过路由直接使用：
+用户明确指定 effort 或 model 时，跳过对应路由：
 ```
 任务：[描述]
 effort=xhigh
+model=fable
 ```
-在 Claude Code Workflow 中：`args: { task: "...", effort: "xhigh" }`
+在 Claude Code Workflow 中：`args: { task: "...", effort: "xhigh", model: "fable" }`
+
+两者可独立 override：只指定 `model` 时 effort 仍自动路由，反之亦然。
 
 ---
 
@@ -142,6 +160,7 @@ SDK 实现示例（Python / TypeScript）→ 见 `references/sdk-examples.md`
 
 ## 注意事项
 
-- `effort` 参数在 Claude Code 中仅 Workflow 脚本的 `agent()` 内生效；直接调用 `Agent` 工具无效
+- `effort` 和 `model` 参数仅在 Workflow 脚本的 `agent()` 内生效；直接调用 `Agent` 工具无效
 - 路由本身应使用 `medium` effort（`low` 会系统性低估复杂任务）
 - Workflow 执行模式需额外安装 `vlong-route-effort-task.js`（`./install.sh --with-workflow`）
+- 模型别名由 Claude Code Workflow 解析，与 Anthropic API 的完整模型 ID 不同

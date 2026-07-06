@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v2.2.0 (2026-07-07)
+
+### 新增
+- **模型路由**：effort 路由完成后自动映射到最优模型（haiku/sonnet/fable）
+  - low/medium/high → sonnet/haiku（成本敏感区间）
+  - xhigh/max → fable（最强推理）
+- **`model` override 参数**：支持独立于 effort 单独 override 模型
+- Workflow 输出格式更新：`[路由] effort=<level> model=<model>`
+
+### 改进
+- description 新增"模型路由"触发场景
+- README 路由规则表新增模型列
+- SKILL.md 新增模型路由规则章节和模型别名说明
+
 ## v2.1.0 (2026-07-06)
 
 ### 改进
