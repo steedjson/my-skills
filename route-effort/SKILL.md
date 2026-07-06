@@ -101,13 +101,13 @@ effort 确定后，按以下映射自动选择模型：
 
 | effort | 默认模型 | 理由 |
 |--------|----------|------|
-| `low` | `haiku` | 机械任务，速度/成本优先 |
-| `medium` | `sonnet` | 日常任务，能力与成本平衡 |
-| `high` | `sonnet` | 多文件开发，sonnet 足够胜任 |
-| `xhigh` | `fable` | 跨模块深度分析，需要最强推理 |
-| `max` | `fable` | 安全审计/并发/正确性极限，最强模型 |
+| `low` | `claude-haiku-4-5-20251001` | 机械任务，速度/成本优先 |
+| `medium` | `claude-sonnet-5` | 日常任务，能力与成本平衡 |
+| `high` | `claude-sonnet-5` | 多文件开发，sonnet 足够胜任 |
+| `xhigh` | `claude-fable-5` | 跨模块深度分析，需要最强推理 |
+| `max` | `claude-fable-5` | 安全审计/并发/正确性极限，最强模型 |
 
-模型别名对应：`haiku` = claude-haiku-4-5，`sonnet` = claude-sonnet-5，`fable` = claude-fable-5
+模型别名对应：完整 ID 直接传入 `agent()` 的 `model` 参数。
 
 ## 手动 Override
 

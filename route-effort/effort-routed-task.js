@@ -10,15 +10,20 @@ export const meta = {
 const DEFAULT_TASK = '跨模块变更：修改公共缓存层，评估对各服务模块的影响范围';
 const VALID_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 // opus 仅支持手动 override，不参与自动路由（成本过高）
-const VALID_MODELS = ['haiku', 'sonnet', 'fable', 'opus'];
+const VALID_MODELS = [
+  'claude-haiku-4-5-20251001',
+  'claude-sonnet-5',
+  'claude-fable-5',
+  'claude-opus-4-8',
+];
 
-// effort → 默认模型映射
+// effort → 默认模型映射（使用完整模型 ID）
 const EFFORT_MODEL_MAP = {
-  low:    'haiku',   // claude-haiku-4-5：机械任务，速度优先
-  medium: 'sonnet',  // claude-sonnet-5：日常任务，能力/成本平衡
-  high:   'sonnet',  // claude-sonnet-5：多文件开发，sonnet 足够
-  xhigh:  'fable',   // claude-fable-5：跨模块深度分析
-  max:    'fable',   // claude-fable-5：安全审计/并发/正确性极限
+  low:    'claude-haiku-4-5-20251001',  // 机械任务，速度优先
+  medium: 'claude-sonnet-5',            // 日常任务，能力/成本平衡
+  high:   'claude-sonnet-5',            // 多文件开发，sonnet 足够
+  xhigh:  'claude-fable-5',             // 跨模块深度分析
+  max:    'claude-fable-5',             // 安全审计/并发/正确性极限
 };
 
 const taskDesc = args?.task ?? DEFAULT_TASK;
