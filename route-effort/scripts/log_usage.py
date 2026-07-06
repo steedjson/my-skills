@@ -8,7 +8,7 @@ import sys
 import datetime
 from pathlib import Path
 
-LOG_FILE = Path.home() / ".gstack" / "route-effort-usage.jsonl"
+LOG_FILE = Path.home() / ".skill-opt" / "route-effort" / "route-effort-usage.jsonl"
 
 def main():
     # 确保日志目录存在
@@ -41,6 +41,6 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         # 静默失败，不打断主流程
-        error_log = Path.home() / ".gstack" / "route-effort-log-errors.txt"
+        error_log = Path.home() / ".skill-opt" / "route-effort" / "log-errors.txt"
         with open(error_log, "a") as f:
             f.write(f"{datetime.datetime.utcnow().isoformat()}: {e}\n")

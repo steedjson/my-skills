@@ -36,7 +36,7 @@
 使用任意 Claude Code 项目触发 route-effort skill 后，检查日志：
 
 ```bash
-cat ~/.gstack/route-effort-usage.jsonl
+cat ~/.skill-opt/route-effort/route-effort-usage.jsonl
 ```
 
 应看到 JSON 行格式的记录。
@@ -47,7 +47,7 @@ cat ~/.gstack/route-effort-usage.jsonl
 
 **查看当前数据量**：
 ```bash
-wc -l ~/.gstack/route-effort-usage.jsonl
+wc -l ~/.skill-opt/route-effort/route-effort-usage.jsonl
 ```
 
 ---
@@ -79,7 +79,7 @@ python3 route-effort/scripts/train_route_effort.py
 
 检查输出：
 ```bash
-cat ~/.gstack/route-effort-skillopt-out/best_skill.md
+cat ~/.skill-opt/route-effort/skillopt-out/best_skill.md
 ```
 
 如果效果好，脚本会自动备份旧 SKILL.md 并应用新版本。
@@ -90,7 +90,7 @@ cat ~/.gstack/route-effort-skillopt-out/best_skill.md
 ```bash
 crontab -e
 # 添加：每周一凌晨2点自动训练
-0 2 * * 1 python3 /Users/changsailong/BDSYNC/self/AI/tools/my-skills/route-effort/scripts/train_route_effort.py >> ~/.gstack/route-effort-train.log 2>&1
+0 2 * * 1 python3 /Users/changsailong/BDSYNC/self/AI/tools/my-skills/route-effort/scripts/train_route_effort.py >> ~/.skill-opt/route-effort/train.log 2>&1
 ```
 
 **方案 B：Claude Code `/loop` skill**
@@ -107,8 +107,8 @@ crontab -e
 | `log_usage.py` | Hook 脚本，记录每次 skill 触发 |
 | `train_route_effort.py` | 训练脚本，调用 SkillOpt |
 | `prepare_skillopt_env.py` | 生成 SkillOpt 所需的三个文件 |
-| `~/.gstack/route-effort-usage.jsonl` | 使用日志 |
-| `~/.gstack/route-effort-skillopt-out/` | SkillOpt 输出目录 |
+| `~/.skill-opt/route-effort/route-effort-usage.jsonl` | 使用日志 |
+| `~/.skill-opt/route-effort/skillopt-out/` | SkillOpt 输出目录 |
 
 ---
 

@@ -13,10 +13,10 @@ import datetime
 from pathlib import Path
 
 # 路径配置
-LOG_FILE = Path.home() / ".gstack" / "route-effort-usage.jsonl"
+LOG_FILE = Path.home() / ".skill-opt" / "route-effort" / "route-effort-usage.jsonl"
 SKILL_PATH = Path(__file__).parent.parent / "SKILL.md"
-DATA_DIR = Path.home() / ".gstack" / "route-effort-train-data"
-OUT_DIR = Path.home() / ".gstack" / "route-effort-skillopt-out"
+DATA_DIR = Path.home() / ".skill-opt" / "route-effort" / "train-data"
+OUT_DIR = Path.home() / ".skill-opt" / "route-effort" / "skillopt-out"
 SKILLOPT_ENV = Path.home() / "SkillOpt" / "envs" / "route-effort"
 
 # 最小数据量要求
