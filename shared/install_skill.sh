@@ -44,6 +44,13 @@ install_skill() {
     echo "  ✓ skill-opt/: $dest/skill-opt"
   fi
 
+  # 为 Claude Code 技能发现创建命名空间 symlink
+  # Claude Code 只扫描 ~/.claude/skills/ 一级子目录，
+  # 而 skill 实际在 vlong/<name>/，所以需要 vlong:<name> 的 symlink
+  local skill_link="$HOME/.claude/skills/vlong:$skill_name"
+  ln -sfn "$dest" "$skill_link"
+  echo "  ↔ symlink: ~/.claude/skills/vlong:$skill_name → vlong/$skill_name"
+
   local ver
   ver=$(grep '^version:' "$dest/SKILL.md" 2>/dev/null | awk '{print $2}' || echo "?")
   echo "  ✅ $skill_name v${ver} 安装完成"
