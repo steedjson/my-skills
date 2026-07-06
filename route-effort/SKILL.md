@@ -1,6 +1,6 @@
 ---
 name: route-effort
-version: 2.0.0
+version: 2.1.0
 description: >
   评估任务复杂度并路由到合适的 effort 级别（low / medium / high / xhigh / max）。
   帮用户判断一个任务"该花多少力气"——从简单机械操作到高风险跨模块变更都能处理。
@@ -47,6 +47,26 @@ description: >
 **5. 完成确认**
 ```
 [完成] effort=<level> 已使用
+```
+
+**完整示例（high 级别）：**
+```
+[路由] effort=high — 涉及3个文件的功能开发，需要权衡接口设计方案
+
+[执行内容]
+... （任务执行结果）
+
+[完成] effort=high 已使用
+```
+
+**Override 示例（跳过路由）：**
+```
+检测到 effort=max override，跳过路由判断。
+
+[执行内容]
+... （以 max 深度执行）
+
+[完成] effort=max 已使用
 ```
 
 ---

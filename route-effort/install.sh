@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-VERSION="1.4.0"
+VERSION="2.1.0"
 REPO_RAW="https://raw.githubusercontent.com/steedjson/my-skills/main/route-effort"
 SKILL_DIR="$HOME/.claude/skills/route-effort"
 WORKFLOW_DIR="$HOME/.claude/workflows"
