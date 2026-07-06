@@ -17,7 +17,7 @@ LOG_FILE = Path.home() / ".skill-opt" / "route-effort" / "route-effort-usage.jso
 SKILL_PATH = Path(__file__).parent.parent / "SKILL.md"
 DATA_DIR = Path.home() / ".skill-opt" / "route-effort" / "train-data"
 OUT_DIR = Path.home() / ".skill-opt" / "route-effort" / "skillopt-out"
-SKILLOPT_ENV = Path.home() / "SkillOpt" / "envs" / "route-effort"
+SKILLOPT_ENV = Path.home() / ".skill-opt" / "route-effort"
 
 # 最小数据量要求
 MIN_ENTRIES = 50

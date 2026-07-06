@@ -148,7 +148,7 @@ crontab -e
     ├── metrics.json
     └── ...
 
-~/SkillOpt/envs/route-effort/  ← SkillOpt 环境（首次训练时生成）
+~/.skill-opt/route-effort/  ← SkillOpt 环境（首次训练时生成）
 ├── dataloader.py
 ├── rollout.py
 └── initial.md

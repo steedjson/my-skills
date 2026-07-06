@@ -68,7 +68,7 @@ python3 route-effort/scripts/prepare_skillopt_env.py
 ```
 
 这会创建：
-- `~/SkillOpt/envs/route-effort/` 目录
+- `~/.skill-opt/route-effort/` 目录
 - `dataloader.py`、`rollout.py`、`initial.md`
 
 ### 3. 手动训练（首次）

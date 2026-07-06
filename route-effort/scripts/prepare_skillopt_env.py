@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import shutil
 
-SKILLOPT_ENV = Path.home() / "SkillOpt" / "envs" / "route-effort"
+SKILLOPT_ENV = Path.home() / ".skill-opt" / "route-effort"
 SKILL_PATH = Path(__file__).parent.parent / "SKILL.md"
 
 def create_initial_md():
@@ -190,6 +190,8 @@ def main():
 
     print(f"""
 ✅ SkillOpt 环境准备完成！
+
+环境目录: {SKILLOPT_ENV}
 
 下一步：
 1. 确保有 ANTHROPIC_API_KEY 环境变量
