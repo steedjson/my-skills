@@ -2,14 +2,18 @@
 name: route-effort
 version: 2.0.0
 description: >
-  根据任务描述自动路由到合适的 agent effort 级别（low / medium / high / xhigh / max），
-  避免简单任务浪费算力、关键任务推理不足。
+  评估任务复杂度并路由到合适的 effort 级别（low / medium / high / xhigh / max）。
+  帮用户判断一个任务"该花多少力气"——从简单机械操作到高风险跨模块变更都能处理。
 
-  必须使用本 skill 的场景：用户问"这个任务用什么 effort"、"effort 选哪个"、
-  "任务有多复杂"；派遣子 agent / Workflow 前需要决定推理预算；用户提到
-  "route effort"、"路由 effort"；构建 multi-agent orchestration 需要按复杂度分配算力；
-  用户说"帮我判断任务难度"；询问如何把 effort 路由逻辑嵌入 SDK 或 system prompt。
-  即使用户未明确说"route-effort"，只要涉及 agent 调度 + effort 决策，就应主动调用。
+  以下场景应主动调用本 skill，即使用户没有说"effort"或"route-effort"这两个词：
+  - 用户问任务难度、复杂度、工作量："这个任务有多复杂"、"要花多少精力"、"难不难"
+  - 用户在判断该认真处理还是快速搞定："这个要仔细看吗"、"简单任务还是要深度分析"
+  - 用户要给子 agent 或 Workflow 分配推理预算："这个任务给 xhigh 还是 high"
+  - 用户提到"route effort"、"effort 路由"、"任务难度评估"
+  - 构建 multi-agent 系统需要按复杂度分配算力
+  - 询问如何把 effort 路由规则嵌入 SDK 或 system prompt
+
+  只要用户在评估"这个任务值得投入多少推理资源"，就应调用。
 ---
 
 # Route Effort
