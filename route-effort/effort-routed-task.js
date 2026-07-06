@@ -9,6 +9,7 @@ export const meta = {
 
 const DEFAULT_TASK = '跨模块变更：修改公共缓存层，评估对各服务模块的影响范围';
 const VALID_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+// opus 仅支持手动 override，不参与自动路由（成本过高）
 const VALID_MODELS = ['haiku', 'sonnet', 'fable', 'opus'];
 
 // effort → 默认模型映射
@@ -42,7 +43,7 @@ if (overrideEffort && VALID_EFFORTS.includes(overrideEffort)) {
       `按照 route-effort skill 的规则，评估以下任务应使用哪个 effort 级别。\n` +
       `只返回 effort=<level>，level 取值：low/medium/high/xhigh/max，不要其他内容。\n` +
       `---\n${taskDesc}\n---`,
-      { effort: 'medium', label: `route: ${taskDesc.slice(0, 40)}` }
+      { effort: 'low', label: `route: ${taskDesc.slice(0, 40)}` }
     );
     const match = (routeResult || '').match(/effort=(low|medium|high|xhigh|max)/);
     if (match) {
@@ -72,6 +73,8 @@ log(`路由结果：effort=${effort}，model=${model}`);
 // ── Phase 2: 执行 ──────────────────────────────────────────────
 phase('Execute');
 
+let usedFallbackModel = false;
+
 try {
   await agent(taskDesc, {
     effort,
@@ -79,16 +82,24 @@ try {
     label: `execute [${effort}/${model}]: ${taskDesc.slice(0, 40)}`,
   });
 } catch (e) {
-  log(`WARN: model=${model} 执行失败，使用默认模型重试（${e?.message ?? e}）`);
+  // 只有模型相关错误才触发 fallback，任务本身的失败直接抛出
+  const isModelError = /model|unsupported|invalid.*model/i.test(e?.message ?? '');
+  if (!isModelError) {
+    log(`ERROR: 执行失败（${e?.message ?? e}）`);
+    throw e;
+  }
+  log(`WARN: model=${model} 不支持，使用默认模型重试（${e?.message ?? e}）`);
   try {
     await agent(taskDesc, {
       effort,
       label: `execute [${effort}/default]: ${taskDesc.slice(0, 40)}`,
     });
+    usedFallbackModel = true;
   } catch (e2) {
     log(`ERROR: 重试也失败（${e2?.message ?? e2}）`);
     throw e2;
   }
 }
 
-log(`任务完成，使用 effort=${effort}，model=${model}`);
+const modelUsed = usedFallbackModel ? 'default' : model;
+log(`任务完成，使用 effort=${effort}，model=${modelUsed}`);
