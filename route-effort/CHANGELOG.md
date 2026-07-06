@@ -1,18 +1,16 @@
 # CHANGELOG
 
-## v2.2.0 (2026-07-07)
+## v2.3.0 (2026-07-07)
 
-### 新增
-- **模型路由**：effort 路由完成后自动映射到最优模型（haiku/sonnet/fable）
-  - low/medium/high → sonnet/haiku（成本敏感区间）
-  - xhigh/max → fable（最强推理）
-- **`model` override 参数**：支持独立于 effort 单独 override 模型
-- Workflow 输出格式更新：`[路由] effort=<level> model=<model>`
+### 回滚
+- **移除模型路由**：经实测验证，Claude Code Workflow `agent()` 的 `model` 参数被忽略（所有子 agent 继承 session 模型），模型路由功能无法实现
+- 恢复为纯 effort 路由（v2.1.0 行为）
+- route agent effort 从 `medium` 降为 `low`（分类任务足够）
+- 注意事项新增"模型路由不可用"说明
 
-### 改进
-- description 新增"模型路由"触发场景
-- README 路由规则表新增模型列
-- SKILL.md 新增模型路由规则章节和模型别名说明
+### 修复保留（来自 code review）
+- fallback 只捕获模型错误（已移除，因模型路由移除）
+- opus 文档注释
 
 ## v2.1.0 (2026-07-06)
 
