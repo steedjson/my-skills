@@ -15,7 +15,7 @@ install_skill() {
     esac
   done
 
-  local dest="$HOME/.claude/skills/$skill_name"
+  local dest="$HOME/.claude/skills/vlong/$skill_name"
   echo "→ 安装 $skill_name"
 
   mkdir -p "$dest" "$dest/references" "$dest/scripts"
@@ -35,8 +35,8 @@ install_skill() {
   if [ "$with_workflow" = true ]; then
     mkdir -p "$HOME/.claude/workflows"
     curl -fsSL "$REPO_RAW/$skill_name/effort-routed-task.js" \
-      -o "$HOME/.claude/workflows/${skill_name}-task.js"
-    echo "  ↓ Workflow: ${skill_name}-task.js"
+      -o "$HOME/.claude/workflows/vlong-${skill_name}-task.js"
+    echo "  ↓ Workflow: vlong-${skill_name}-task.js"
   fi
 
   if [ "$with_skill_opt" = true ]; then

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """SkillOpt 环境准备脚本。
 
-在 ~/.claude/skills/route-effort/skill-opt/ 下创建：
+在 ~/.claude/skills/vlong/route-effort/skill-opt/ 下创建：
 - dataloader.py
 - rollout.py
 - initial.md

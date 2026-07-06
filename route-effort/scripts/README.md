@@ -9,7 +9,7 @@
 默认安装是纯 skill，不会创建 `skill-opt/` 数据目录。要启用自训练，安装时必须带参数：
 
 ```bash
-# 本地安装（推荐，~/.claude/skills/route-effort 会指向当前项目目录）
+# 本地安装（推荐，~/.claude/skills/vlong/route-effort 会指向当前项目目录）
 ./route-effort/install.sh --with-skill-opt
 
 # 如还需要 Workflow 执行模式
@@ -19,7 +19,7 @@
 安装后数据实体位于：
 
 ```bash
-~/.claude/skills/route-effort/skill-opt/
+~/.claude/skills/vlong/route-effort/skill-opt/
 ```
 
 ### 1. 配置 Claude Code Hook
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/.claude/skills/route-effort/scripts/log_usage.py '$CLAUDE_TOOL_INPUT' '$CLAUDE_TOOL_OUTPUT'"
+            "command": "python3 ~/.claude/skills/vlong/route-effort/scripts/log_usage.py '$CLAUDE_TOOL_INPUT' '$CLAUDE_TOOL_OUTPUT'"
           }
         ]
       }
@@ -46,7 +46,7 @@
 
 **注意**：如果 route-effort 安装在其他位置，修改路径为：
 ```
-$HOME/.claude/skills/route-effort/scripts/log_usage.py
+$HOME/.claude/skills/vlong/route-effort/scripts/log_usage.py
 ```
 
 ### 2. 验证日志工作
@@ -54,7 +54,7 @@ $HOME/.claude/skills/route-effort/scripts/log_usage.py
 使用任意 Claude Code 项目触发 route-effort skill 后，检查日志：
 
 ```bash
-cat ~/.claude/skills/route-effort/skill-opt/route-effort-usage.jsonl
+cat ~/.claude/skills/vlong/route-effort/skill-opt/route-effort-usage.jsonl
 ```
 
 应看到 JSON 行格式的记录。
@@ -65,7 +65,7 @@ cat ~/.claude/skills/route-effort/skill-opt/route-effort-usage.jsonl
 
 **查看当前数据量**：
 ```bash
-wc -l ~/.claude/skills/route-effort/skill-opt/route-effort-usage.jsonl
+wc -l ~/.claude/skills/vlong/route-effort/skill-opt/route-effort-usage.jsonl
 ```
 
 ---
@@ -86,7 +86,7 @@ python3 route-effort/scripts/prepare_skillopt_env.py
 ```
 
 这会创建：
-- `~/.claude/skills/route-effort/skill-opt/` 目录
+- `~/.claude/skills/vlong/route-effort/skill-opt/` 目录
 - `dataloader.py`、`rollout.py`、`initial.md`
 
 ### 3. 手动训练（首次）
@@ -97,7 +97,7 @@ python3 route-effort/scripts/train_route_effort.py
 
 检查输出：
 ```bash
-cat ~/.claude/skills/route-effort/skill-opt/skillopt-out/best_skill.md
+cat ~/.claude/skills/vlong/route-effort/skill-opt/skillopt-out/best_skill.md
 ```
 
 如果效果好，脚本会自动备份旧 SKILL.md 并应用新版本。
@@ -108,7 +108,7 @@ cat ~/.claude/skills/route-effort/skill-opt/skillopt-out/best_skill.md
 ```bash
 crontab -e
 # 添加：每周一凌晨2点自动训练
-0 2 * * 1 python3 $HOME/.claude/skills/route-effort/scripts/train_route_effort.py >> $HOME/.claude/skills/route-effort/skill-opt/train.log 2>&1
+0 2 * * 1 python3 $HOME/.claude/skills/vlong/route-effort/scripts/train_route_effort.py >> $HOME/.claude/skills/vlong/route-effort/skill-opt/train.log 2>&1
 ```
 
 **方案 B：Claude Code `/loop` skill**
@@ -125,8 +125,8 @@ crontab -e
 | `log_usage.py` | Hook 脚本，记录每次 skill 触发 |
 | `train_route_effort.py` | 训练脚本，调用 SkillOpt |
 | `prepare_skillopt_env.py` | 生成 SkillOpt 所需的三个文件 |
-| `~/.claude/skills/route-effort/skill-opt/route-effort-usage.jsonl` | 使用日志 |
-| `~/.claude/skills/route-effort/skill-opt/skillopt-out/` | SkillOpt 输出目录 |
+| `~/.claude/skills/vlong/route-effort/skill-opt/route-effort-usage.jsonl` | 使用日志 |
+| `~/.claude/skills/vlong/route-effort/skill-opt/skillopt-out/` | SkillOpt 输出目录 |
 
 ---
 

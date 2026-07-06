@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 $HOME/.claude/skills/route-effort/scripts/log_usage.py '$CLAUDE_TOOL_INPUT' '$CLAUDE_TOOL_OUTPUT'"
+            "command": "python3 $HOME/.claude/skills/vlong/route-effort/scripts/log_usage.py '$CLAUDE_TOOL_INPUT' '$CLAUDE_TOOL_OUTPUT'"
           }
         ]
       }
@@ -40,7 +40,7 @@
 
 **验证**：使用任意项目触发 route-effort skill 后，运行：
 ```bash
-cat ~/.claude/skills/route-effort/skill-opt/route-effort-usage.jsonl
+cat ~/.claude/skills/vlong/route-effort/skill-opt/route-effort-usage.jsonl
 ```
 应该看到一条 JSON 记录。
 
@@ -82,7 +82,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 2. 正常使用 Claude Code，让 route-effort 自然触发
 3. 定期检查数据量：
    ```bash
-   wc -l ~/.claude/skills/route-effort/skill-opt/route-effort-usage.jsonl
+   wc -l ~/.claude/skills/vlong/route-effort/skill-opt/route-effort-usage.jsonl
    ```
 4. 目标：≥50 条记录
 
@@ -98,7 +98,7 @@ python3 route-effort/scripts/prepare_skillopt_env.py
 python3 route-effort/scripts/train_route_effort.py
 
 # 3. 检查结果
-cat ~/.claude/skills/route-effort/SKILL.md  # 自动更新
+cat ~/.claude/skills/vlong/route-effort/SKILL.md  # 自动更新
 ```
 
 **预期**：
@@ -120,7 +120,7 @@ python3 route-effort/scripts/train_route_effort.py
 crontab -e
 
 # 添加：每周一凌晨2点自动训练
-0 2 * * 1 python3 $HOME/.claude/skills/route-effort/scripts/train_route_effort.py >> $HOME/.claude/skills/route-effort/skill-opt/train.log 2>&1
+0 2 * * 1 python3 $HOME/.claude/skills/vlong/route-effort/scripts/train_route_effort.py >> $HOME/.claude/skills/vlong/route-effort/skill-opt/train.log 2>&1
 ```
 
 ---
@@ -128,7 +128,7 @@ crontab -e
 ## 📁 文件布局
 
 ```
-~/.claude/skills/route-effort/
+~/.claude/skills/vlong/route-effort/
 ├── SKILL.md                    ← 会被自动更新
 ├── SKILL.md.bak.YYYY-MM-DD     ← 自动备份
 └── scripts/
@@ -137,7 +137,7 @@ crontab -e
     ├── train_route_effort.py   ← 训练脚本
     └── README.md
 
-~/.claude/skills/route-effort/skill-opt/
+~/.claude/skills/vlong/route-effort/skill-opt/
 ├── route-effort-usage.jsonl    ← 使用日志（持续追加）
 ├── train-data/                 ← 训练数据（自动生成）
 │   ├── train.json
@@ -148,7 +148,7 @@ crontab -e
     ├── metrics.json
     └── ...
 
-~/.claude/skills/route-effort/skill-opt/  ← SkillOpt 环境（首次训练时生成）
+~/.claude/skills/vlong/route-effort/skill-opt/  ← SkillOpt 环境（首次训练时生成）
 ├── dataloader.py
 ├── rollout.py
 └── initial.md
@@ -176,7 +176,7 @@ open ~/.claude/settings.json
 
 # 3. 验证 Hook 工作
 # （使用任意项目触发 route-effort，然后检查日志）
-cat ~/.claude/skills/route-effort/skill-opt/route-effort-usage.jsonl
+cat ~/.claude/skills/vlong/route-effort/skill-opt/route-effort-usage.jsonl
 ```
 
 **3-4周后**：

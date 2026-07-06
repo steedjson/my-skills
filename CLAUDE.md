@@ -78,5 +78,5 @@ curl -fsSL .../route-effort/install.sh | bash
 git pull
 
 # 测试日志
-cat ~/.claude/skills/route-effort/skill-opt/route-effort-usage.jsonl
+cat ~/.claude/skills/vlong/route-effort/skill-opt/route-effort-usage.jsonl
 ```
