@@ -1,6 +1,6 @@
 export const meta = {
   name: 'effort-routed-task',
-  description: '演示如何通过 route-effort skill 自动决定 effort，再派遣子 agent 执行任务',
+  description: '根据任务描述自动路由到合适的 agent effort 级别，再派遣执行 agent。支持手动 override。',
   phases: [
     { title: 'Route', detail: '调用 route-effort skill 决定 effort 级别' },
     { title: 'Execute', detail: '用路由结果派遣执行 agent' },

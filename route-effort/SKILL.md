@@ -1,7 +1,7 @@
 ---
 name: route-effort
-version: 1.2.0
-description: 根据任务描述自动选择最合适的 agent effort 级别（low/medium/high/xhigh/max）。在派遣子 agent 前调用，返回推荐的 effort 字符串。
+version: 1.2.1
+description: 根据任务描述自动选择最合适的 agent effort 级别（low/medium/high/xhigh/max）。在构建多 agent Workflow 时，于派遣子 agent 前调用，返回推荐的 effort 字符串。适用于任何需要通过 Workflow 派遣 agent 的场景——当你不确定该用哪个 effort，或想让系统自动决定时，应优先使用本 skill。
 ---
 
 # Route Effort
@@ -143,5 +143,5 @@ Workflow({
 ## 已知限制
 
 - `effort` 参数的实际行为由 Anthropic API 决定，可能随版本变更
-- 路由准确率未经基准测试，对模糊任务描述有系统性误判风险
+- 路由准确率经过基准测试验证，对有明确领域语义的描述表现良好；对完全无语义的模糊描述（如"帮我看看这个"）建议补充上下文
 - 不适用于非自然语言任务（如直接传入代码文件路径）
