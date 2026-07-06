@@ -46,7 +46,7 @@
 
 **注意**：如果 route-effort 安装在其他位置，修改路径为：
 ```
-/Users/changsailong/BDSYNC/self/AI/tools/my-skills/route-effort/scripts/log_usage.py
+$HOME/.claude/skills/route-effort/scripts/log_usage.py
 ```
 
 ### 2. 验证日志工作
@@ -108,7 +108,7 @@ cat ~/.claude/skills/route-effort/skill-opt/skillopt-out/best_skill.md
 ```bash
 crontab -e
 # 添加：每周一凌晨2点自动训练
-0 2 * * 1 python3 /Users/changsailong/BDSYNC/self/AI/tools/my-skills/route-effort/scripts/train_route_effort.py >> ~/.claude/skills/route-effort/skill-opt/train.log 2>&1
+0 2 * * 1 python3 $HOME/.claude/skills/route-effort/scripts/train_route_effort.py >> $HOME/.claude/skills/route-effort/skill-opt/train.log 2>&1
 ```
 
 **方案 B：Claude Code `/loop` skill**

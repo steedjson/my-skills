@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /Users/changsailong/BDSYNC/self/AI/tools/my-skills/route-effort/scripts/log_usage.py '$CLAUDE_TOOL_INPUT' '$CLAUDE_TOOL_OUTPUT'"
+            "command": "python3 $HOME/.claude/skills/route-effort/scripts/log_usage.py '$CLAUDE_TOOL_INPUT' '$CLAUDE_TOOL_OUTPUT'"
           }
         ]
       }
@@ -120,7 +120,7 @@ python3 route-effort/scripts/train_route_effort.py
 crontab -e
 
 # 添加：每周一凌晨2点自动训练
-0 2 * * 1 python3 /Users/changsailong/BDSYNC/self/AI/tools/my-skills/route-effort/scripts/train_route_effort.py >> ~/.claude/skills/route-effort/skill-opt/train.log 2>&1
+0 2 * * 1 python3 $HOME/.claude/skills/route-effort/scripts/train_route_effort.py >> $HOME/.claude/skills/route-effort/skill-opt/train.log 2>&1
 ```
 
 ---
