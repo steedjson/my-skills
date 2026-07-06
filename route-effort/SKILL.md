@@ -1,5 +1,5 @@
 ---
-name: route-effort
+name: vlong:route-effort
 version: 2.1.0
 description: >
   评估任务复杂度并路由到合适的 effort 级别（low / medium / high / xhigh / max）。
