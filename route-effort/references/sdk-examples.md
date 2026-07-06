@@ -61,15 +61,15 @@ async function routeEffort(
 ```javascript
 // 自动路由 + 执行
 Workflow({
-  scriptPath: "~/.claude/workflows/effort-routed-task.js",
+  scriptPath: "~/.claude/workflows/vlong-route-effort-task.js",
   args: { task: "跨模块变更：修改认证中间件，评估影响范围" },
 });
 
 // 手动 override（跳过路由）
 Workflow({
-  scriptPath: "~/.claude/workflows/effort-routed-task.js",
+  scriptPath: "~/.claude/workflows/vlong-route-effort-task.js",
   args: { task: "任务描述", effort: "xhigh" },
 });
 ```
 
-> 需先执行 `./install.sh --with-workflow` 安装 `effort-routed-task.js`。
+> 需先执行 `./install.sh --with-workflow` 安装 `vlong-route-effort-task.js`。

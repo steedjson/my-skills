@@ -78,5 +78,5 @@
 ### 初始发布
 - 5 级 effort 路由规则（low/medium/high/xhigh/max）
 - 决策树和关键词指南
-- Claude Code Workflow 实现（`effort-routed-task.js`）
+- Claude Code Workflow 实现（`vlong-route-effort-task.js`）
 - 安装脚本和文档

@@ -144,4 +144,4 @@ SDK 实现示例（Python / TypeScript）→ 见 `references/sdk-examples.md`
 
 - `effort` 参数在 Claude Code 中仅 Workflow 脚本的 `agent()` 内生效；直接调用 `Agent` 工具无效
 - 路由本身应使用 `medium` effort（`low` 会系统性低估复杂任务）
-- Workflow 执行模式需额外安装 `effort-routed-task.js`（`./install.sh --with-workflow`）
+- Workflow 执行模式需额外安装 `vlong-route-effort-task.js`（`./install.sh --with-workflow`）

@@ -32,7 +32,7 @@ curl -fsSL https://raw.githubusercontent.com/steedjson/my-skills/main/route-effo
 
 安装后：
 - `~/.claude/skills/route-effort/SKILL.md` — skill 定义（必须）
-- `~/.claude/workflows/effort-routed-task.js` — Workflow 脚本（`--with-workflow` 时安装）
+- `~/.claude/workflows/vlong-route-effort-task.js` — Workflow 脚本（`--with-workflow` 时安装）
 
 ---
 
@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/steedjson/my-skills/main/route-effo
 
 ```
 Workflow({
-  scriptPath: '~/.claude/workflows/effort-routed-task.js',
+  scriptPath: '~/.claude/workflows/vlong-route-effort-task.js',
   args: { task: '跨模块变更：修改认证中间件，评估影响范围' }
 })
 ```
@@ -51,7 +51,7 @@ Workflow({
 
 ```
 Workflow({
-  scriptPath: '~/.claude/workflows/effort-routed-task.js',
+  scriptPath: '~/.claude/workflows/vlong-route-effort-task.js',
   args: { task: '你的任务', effort: 'xhigh' }
 })
 ```
