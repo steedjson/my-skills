@@ -13,7 +13,7 @@ import datetime
 from pathlib import Path
 
 # 路径配置
-SKILL_DIR = Path.home() / ".claude" / "skills" / "route-effort"
+SKILL_DIR = Path.home() / ".claude" / "skills" / "vlong" / "route-effort"
 SKILL_OPT_DIR = SKILL_DIR / "skill-opt"
 LOG_FILE = SKILL_OPT_DIR / "route-effort-usage.jsonl"
 SKILL_PATH = SKILL_DIR / "SKILL.md"

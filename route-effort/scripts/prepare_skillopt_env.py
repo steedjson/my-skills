@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import shutil
 
-SKILL_DIR = Path.home() / ".claude" / "skills" / "route-effort"
+SKILL_DIR = Path.home() / ".claude" / "skills" / "vlong" / "route-effort"
 SKILLOPT_ENV = SKILL_DIR / "skill-opt"
 SKILL_PATH = SKILL_DIR / "SKILL.md"
 

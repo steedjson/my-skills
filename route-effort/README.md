@@ -8,30 +8,16 @@
 
 ## 安装
 
-### 本地安装（仅 SKILL.md，推荐）
-
 ```bash
-./install.sh
-```
-
-### 本地安装（含 Workflow 高级用法）
-
-```bash
-./install.sh --with-workflow
-```
-
-### 远程安装
-
-```bash
-# 仅 SKILL.md
+# 安装（仅 SKILL.md，默认）
 curl -fsSL https://raw.githubusercontent.com/steedjson/my-skills/main/route-effort/install.sh | bash
 
-# 含 Workflow
+# 安装（含 Workflow 高级用法）
 curl -fsSL https://raw.githubusercontent.com/steedjson/my-skills/main/route-effort/install.sh | bash -s -- --with-workflow
 ```
 
 安装后：
-- `~/.claude/skills/route-effort/SKILL.md` — skill 定义（必须）
+- `~/.claude/skills/vlong/route-effort/SKILL.md` — skill 定义（必须）
 - `~/.claude/workflows/vlong-route-effort-task.js` — Workflow 脚本（`--with-workflow` 时安装）
 
 ---
