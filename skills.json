@@ -1,0 +1,18 @@
+{
+  "name": "vlong",
+  "version": "1.0.0",
+  "description": "Personal Claude Code skills collection",
+  "repo": "https://github.com/steedjson/my-skills",
+  "skills": [
+    {
+      "name": "route-effort",
+      "description": "Task complexity routing to effort levels (low/medium/high/xhigh/max)",
+      "workflow": "effort-routed-task.js",
+      "files": [
+        "SKILL.md",
+        "CHANGELOG.md",
+        "references/sdk-examples.md"
+      ]
+    }
+  ]
+}

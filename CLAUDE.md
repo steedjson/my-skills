@@ -4,36 +4,80 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository purpose
 
-Personal collection of Claude Code skills authored by the user ("自己日常总结的skills"). Not a git repository. Each skill lives in its own top-level directory. Currently contains one skill: `route-effort`.
+**vlong** — 个人 Claude Code skills 集合包。每个 skill 是一个独立子目录，通过包级安装器统一管理。
 
-## Skill package layout
+GitHub repo: `steedjson/my-skills`（安装后以 `vlong` 为包名）
 
-Every skill directory follows the same convention (see `route-effort/` as the reference example):
+## 包结构
 
-- `SKILL.md` — the skill definition consumed by Claude Code's Skill tool. Frontmatter (`name`, `description`) controls discovery/triggering; the body documents the decision rules.
-- `<name>.js` — an optional Workflow script implementing the skill's logic (used when the skill needs to orchestrate `agent()` calls rather than just provide guidance text).
-- `install.sh` — installer that copies (local) or `curl`s (remote) the skill's files into `~/.claude/skills/<name>/` and `~/.claude/workflows/`. Detects local-vs-remote execution by checking whether `BASH_SOURCE` resolves to a real path.
-- `README.md` — human-facing usage docs and copy-paste install instructions.
+```
+my-skills/              ← vlong 包根目录
+├── install.sh              ← 包级安装器（安装一个或全部 skill）
+├── skills.json             ← 包清单（skill 列表、版本、文件）
+├── shared/
+│   └── install_skill.sh    ← 单 skill 安装逻辑（共享函数库）
+├── route-effort/           ← skill 实体
+│   ├── SKILL.md
+│   ├── install.sh          ← 薄壳，代理到根 install.sh
+│   ├── references/
+│   ├── scripts/            ← SkillOpt 脚本
+│   └── skill-opt/          ← 训练数据（--with-skill-opt 时创建）
+└── CLAUDE.md
+```
 
-When adding a new skill, mirror this four-file structure rather than inventing a new layout.
+## 安装方式
+
+```bash
+# 安装全部 skill（本地，符号链接）
+./install.sh
+
+# 安装指定 skill
+./install.sh route-effort
+
+# 带训练支持
+./install.sh route-effort --with-skill-opt
+
+# 远程一键安装
+curl -fsSL https://raw.githubusercontent.com/steedjson/my-skills/main/install.sh | bash
+```
+
+本地安装创建符号链接：`~/.claude/skills/route-effort → 项目/route-effort/`
+`git pull` 后 skill 立即生效，无需重新安装。
+
+## 新增 skill 规范
+
+每个 skill 目录最少包含：
+
+| 文件 | 必须 | 说明 |
+|------|------|------|
+| `SKILL.md` | ✅ | skill 定义（frontmatter: name, version, description） |
+| `install.sh` | ✅ | 薄壳，代理到根 install.sh |
+| `README.md` | ✅ | 安装说明 + 快速参考 |
+| `references/` | 可选 | SDK 示例、参考文档 |
+| `scripts/` | 可选 | SkillOpt 脚本（log_usage.py 等） |
+
+新增 skill 时同步更新 `skills.json`。
 
 ## route-effort skill
 
-Routes a task description to an agent `effort` level (`low`/`medium`/`high`/`xhigh`/`max`) based on risk and required reasoning depth, so simple tasks don't burn tokens and critical tasks don't get under-reasoned.
+路由任务描述到合适的 agent `effort` 级别（`low`/`medium`/`high`/`xhigh`/`max`）。
 
-Critical constraint to know before touching this skill or writing similar ones: **the `effort` option only takes effect inside a Workflow script's `agent()` calls.** The standalone `Agent` tool has no `effort` parameter — passing one there is silently ignored. Any effort-routing logic must be applied through `Workflow({scriptPath, args})`, not through a direct `Agent` call.
+关键约束：`effort` 参数只在 Workflow 脚本的 `agent()` 中生效，直接 `Agent` 工具调用无效。
 
-`effort-routed-task.js` demonstrates the pattern: it first calls `agent()` at `effort: 'medium'` to classify the task (deliberately not `low` — that under-rates complex tasks) and parses `effort=<level>` from the response, then re-dispatches the actual task via `agent()` at the routed effort level.
+触发测试：20/20 = 100%（v2.1.0，触发范围覆盖隐式复杂度评估场景）
 
-Routing is sensitive to phrasing in the task description — vague framing like "分析影响范围" gets under-routed to `medium`; a description that explicitly names cross-module scope ("跨模块变更：修改X，影响A/B/C模块") reliably routes to `xhigh`. See the table and examples in `route-effort/SKILL.md` for the full rule set before changing routing behavior.
+## 常用命令
 
-## Known gaps
+```bash
+# 安装 route-effort
+./install.sh route-effort
 
-`install.sh` and `README.md` still contain the placeholder `YOUR_USERNAME` in the GitHub raw-content URL — the remote `curl | bash` install path won't work until that's replaced with the actual repo owner/path.
+# 安装并启用训练支持
+./install.sh route-effort --with-skill-opt
 
-## Commands
+# 本地升级（符号链接安装后）
+git pull
 
-No build, lint, or test tooling exists in this repo — it's skill/doc/shell content only.
-
-- Install the `route-effort` skill locally: `./route-effort/install.sh` (copies `SKILL.md` into `~/.claude/skills/route-effort/` and `effort-routed-task.js` into `~/.claude/workflows/`)
-- Exercise the workflow after installing: `Workflow({scriptPath: '~/.claude/workflows/effort-routed-task.js', args: {task: "<task description>"}})`
+# 测试日志
+cat ~/.claude/skills/route-effort/skill-opt/route-effort-usage.jsonl
+```
