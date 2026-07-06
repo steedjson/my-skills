@@ -1,6 +1,6 @@
 ---
 name: route-effort
-version: 1.3.0
+version: 1.4.0
 description: 根据任务描述自动路由到合适的 agent effort 级别（low/medium/high/xhigh/max）。可作为可移植路由规范嵌入任何 agent 系统——Claude Code Workflow、Anthropic SDK、LangChain 或自定义框架均适用。当你需要为 agent 调度决定 effort 参数、或在 system prompt 中内嵌任务复杂度路由规则时，应优先参考本 skill。
 ---
 
@@ -59,6 +59,43 @@ description: 根据任务描述自动路由到合适的 agent effort 级别（lo
 
 ---
 
+## 执行流程（Skill 直接调用模式）
+
+当通过 `Skill` 工具调用本 skill 时，按以下步骤执行，无需 `.js` 文件：
+
+**Step 1：读取输入**
+- 从用户消息或 `args` 中提取任务描述
+- 检查是否有显式 `effort` override（如 `effort=xhigh`）
+
+**Step 2：路由评估**
+- 若有 override → 直接使用，跳到 Step 3
+- 若无 override → 按路由规则表和决策树评估，输出：
+
+```
+[路由] effort=<level> — <1句理由>
+```
+
+**Step 3：执行**
+- 以推荐的 effort 级别完成任务
+- 在 Claude Code 环境中，高 effort 级别意味着更深入的分析、更多边界条件检查、更完整的输出
+- 任务完成后输出：
+
+```
+[完成] effort=<level> 已使用
+```
+
+**输入格式示例**：
+```
+任务：给认证模块增加 OAuth2 支持，影响 3 个服务文件
+```
+或带 override：
+```
+任务：简单重命名变量
+effort=high
+```
+
+---
+
 ## 可嵌入路由规范（framework-agnostic）
 
 以下片段可**直接复制**到任何 agent system prompt，无需依赖 Claude Code：
@@ -88,6 +125,17 @@ Override: pass effort=<level> explicitly to skip routing.
 ---
 
 ## 在各类框架中使用
+
+### 直接文本咨询（零代码）
+
+在任何对话中直接问：
+
+```
+按照 route-effort 规则，以下任务应使用哪个 effort 级别？
+只返回 effort=<level>。
+
+任务：[你的任务描述]
+```
 
 ### Anthropic Python SDK
 
@@ -156,24 +204,25 @@ async function routeEffort(
 }
 ```
 
-### Claude Code Workflow（原生执行模式）
+### Claude Code Workflow（高级用法，可选）
+
+> 需要额外安装 `effort-routed-task.js`（见下文）。仅在需要通过 Workflow API 实际传递 `effort` 参数给 `agent()` 时使用。
 
 ```javascript
-// 路由 + 执行一体，使用已安装的 effort-routed-task.js
+// 路由 + 执行一体
 Workflow({
   scriptPath: '~/.claude/workflows/effort-routed-task.js',
   args: { task: '跨模块变更：修改认证中间件，评估影响范围' }
 })
 
-// 手动 override（跳过路由）
+// 手动 override
 Workflow({
   scriptPath: '~/.claude/workflows/effort-routed-task.js',
   args: { task: '任务描述', effort: 'xhigh' }
 })
 ```
 
-> **Claude Code 约束**：`effort` 参数只在 Workflow 脚本的 `agent()` 中生效。
-> 直接调用 `Agent` 工具不支持 `effort` 参数。
+> **说明**：`effort` 参数只在 Workflow 脚本的 `agent()` 中生效，直接调用 `Agent` 工具无效。
 
 ### 直接文本咨询（无代码场景）
 

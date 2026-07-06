@@ -2,27 +2,37 @@
 
 > Claude Code skill — 根据任务描述自动路由到合适的 agent `effort` 级别（`low`/`medium`/`high`/`xhigh`/`max`）。
 
-**当前版本：1.3.0**
+**当前版本：1.4.0**
 
 ---
 
 ## 安装
 
-### 本地安装
+### 本地安装（仅 SKILL.md，推荐）
 
 ```bash
 ./install.sh
 ```
 
+### 本地安装（含 Workflow 高级用法）
+
+```bash
+./install.sh --with-workflow
+```
+
 ### 远程安装
 
 ```bash
+# 仅 SKILL.md
 curl -fsSL https://raw.githubusercontent.com/steedjson/my-skills/main/route-effort/install.sh | bash
+
+# 含 Workflow
+curl -fsSL https://raw.githubusercontent.com/steedjson/my-skills/main/route-effort/install.sh | bash -s -- --with-workflow
 ```
 
-安装后文件位置：
-- `~/.claude/skills/route-effort/SKILL.md` — skill 定义
-- `~/.claude/workflows/effort-routed-task.js` — Workflow 脚本
+安装后：
+- `~/.claude/skills/route-effort/SKILL.md` — skill 定义（必须）
+- `~/.claude/workflows/effort-routed-task.js` — Workflow 脚本（`--with-workflow` 时安装）
 
 ---
 
