@@ -79,8 +79,16 @@ try {
     label: `execute [${effort}/${model}]: ${taskDesc.slice(0, 40)}`,
   });
 } catch (e) {
-  log(`ERROR: execute agent 调用失败（${e?.message ?? e}）`);
-  throw e;
+  log(`WARN: model=${model} 执行失败，使用默认模型重试（${e?.message ?? e}）`);
+  try {
+    await agent(taskDesc, {
+      effort,
+      label: `execute [${effort}/default]: ${taskDesc.slice(0, 40)}`,
+    });
+  } catch (e2) {
+    log(`ERROR: 重试也失败（${e2?.message ?? e2}）`);
+    throw e2;
+  }
 }
 
 log(`任务完成，使用 effort=${effort}，model=${model}`);
