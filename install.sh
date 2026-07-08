@@ -15,9 +15,9 @@ export REPO_RAW
 
 # 加载共享安装函数
 TMP_SHARED=$(mktemp)
+trap 'rm -f "${TMP_SHARED:-}"' EXIT
 curl -fsSL "$REPO_RAW/shared/install_skill.sh" -o "$TMP_SHARED"
 source "$TMP_SHARED"
-rm -f "$TMP_SHARED"
 
 # 解析参数
 SKILLS_TO_INSTALL=()

@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v2.3.1 (2026-07-07)
+
+### 调查结论
+- **模型路由在 Claude Code Workflow 中不可实现**（经完整实测验证）
+  - `agent()` 的 `model` 参数被忽略（短别名和完整 ID 均无效）
+  - agent 定义文件 frontmatter `model: haiku` 被忽略
+  - `agentType` 指向不同 model 的 agent 定义也被忽略
+  - 所有子 agent 始终继承 session 模型，无例外
+- 创建了 `~/.claude/skills/vlong-executors/` 插件（含 haiku/sonnet/fable executor 定义）作为实验记录，结论：无效
+
 ## v2.3.0 (2026-07-07)
 
 ### 回滚

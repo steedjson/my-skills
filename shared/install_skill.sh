@@ -7,6 +7,13 @@ REPO_RAW="${REPO_RAW:-https://raw.githubusercontent.com/steedjson/my-skills/main
 
 install_skill() {
   local skill_name="$1"; shift
+
+  # 防止路径穿越：只允许小写字母、数字和连字符，长度 1-64
+  if ! printf '%s' "$skill_name" | grep -qE '^[a-z0-9][a-z0-9-]{0,63}$'; then
+    echo "❌ 非法 skill 名称: '$skill_name'（只允许小写字母、数字和连字符）" >&2
+    return 1
+  fi
+
   local with_workflow=false with_skill_opt=false
   for arg in "$@"; do
     case "$arg" in

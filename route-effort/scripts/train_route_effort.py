@@ -141,11 +141,63 @@ def run_skillopt():
         print(e.stderr)
         return False
 
-def apply_best_skill():
-    """用 best_skill.md 替换当前 SKILL.md。"""
+def validate_skill_frontmatter(skill_path):
+    """验证 SKILL.md 的 frontmatter 是否合法。"""
+    with open(skill_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # 检查 frontmatter 存在
+    if not content.startswith('---\n'):
+        return False, "缺少 frontmatter 起始标记"
+
+    # 提取 frontmatter
+    parts = content.split('---\n', 2)
+    if len(parts) < 3:
+        return False, "frontmatter 格式错误"
+
+    frontmatter = parts[1]
+    required_fields = ['name:', 'version:', 'description:']
+    for field in required_fields:
+        if field not in frontmatter:
+            return False, f"缺少必需字段: {field}"
+
+    return True, "验证通过"
+
+def apply_best_skill(auto_apply=False):
+    """用 best_skill.md 替换当前 SKILL.md（需要显式 --apply）。"""
     best_skill = OUT_DIR / "best_skill.md"
     if not best_skill.exists():
         print(f"❌ 未找到 best_skill.md: {best_skill}")
+        return
+
+    # 校验 frontmatter
+    ok, reason = validate_skill_frontmatter(best_skill)
+    if not ok:
+        print(f"❌ best_skill.md 校验失败（{reason}），已中止，不会覆盖 SKILL.md")
+        return
+
+    # 展示 diff 供审查
+    import difflib
+    with open(SKILL_PATH, 'r', encoding='utf-8') as f:
+        old_lines = f.readlines()
+    with open(best_skill, 'r', encoding='utf-8') as f:
+        new_lines = f.readlines()
+    diff = list(difflib.unified_diff(old_lines, new_lines,
+                                     fromfile='SKILL.md (当前)',
+                                     tofile='best_skill.md (新)'))
+    if diff:
+        print("\n📋 变更预览 (前30行):")
+        for line in diff[:30]:
+            print(line, end='')
+        if len(diff) > 30:
+            print(f"\n  … 另有 {len(diff) - 30} 行变更")
+    else:
+        print("ℹ️  无差异，无需更新")
+        return
+
+    # 门控：必须显式 --apply 才写入
+    if not auto_apply:
+        print("\n⚠️  审查后如确认无误，请添加 --apply 参数重新运行以应用变更")
         return
 
     # 备份当前版本
@@ -168,6 +220,12 @@ def apply_best_skill():
         print(f"   测试准确率: {metrics.get('test_acc', 'N/A')}")
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description='Route-Effort SkillOpt 训练')
+    parser.add_argument('--apply', action='store_true',
+                        help='审查 diff 后确认应用 best_skill.md → SKILL.md（不带此参数只展示 diff）')
+    args = parser.parse_args()
+
     print("=" * 60)
     print("Route-Effort SkillOpt 训练")
     print("=" * 60)
@@ -184,8 +242,8 @@ def main():
     if not run_skillopt():
         return
 
-    # 4. 应用结果
-    apply_best_skill()
+    # 4. 应用结果（需显式 --apply）
+    apply_best_skill(auto_apply=args.apply)
 
     print("\n✅ 训练完成！")
     print(f"\n下次训练：积累更多使用数据后再运行此脚本")
