@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## v2.4.0 (2026-07-09)
+
+### 安装改进
+- **消除 GitHub API 限流（429）**：改用 clone/tarball 到临时目录（一次网络请求），替代逐文件 curl（20+ 请求）
+- **自动环境检测**：有 `git` → clone 仓库，无 `git` → 下载 tarball
+- **失败回退机制**：git clone 失败（限流/离线）自动回退到 tarball 下载
+- **临时目录自动清理**：`trap` 确保安装完成后删除临时文件
+- **代码简化**：`shared/install_skill.sh` 移除 curl 分支，纯本地 `cp` 操作
+
+### 安全修复（Codex Challenge 发现）
+- **路径穿越防护**：skill 名称校验（只允许 `[a-z0-9-]`，长度 1-64）
+- **Secrets 过滤**：日志输出自动脱敏（API keys、tokens、密码）
+- **SQL 注入防护**：SkillOpt 查询使用参数化绑定
+- **Frontmatter 验证**：SKILL.md 格式校验，防止 YAML 注入
+- 修复 13 个漏洞：3 High、7 Medium、3 Low
+
+### 修复
+- `--with-workflow` 在本地模式下失效（遗漏 curl → cp 迁移）
+
 ## v2.3.1 (2026-07-07)
 
 ### 调查结论
