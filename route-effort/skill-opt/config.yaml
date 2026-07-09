@@ -2,8 +2,8 @@
 
 model:
   backend: claude_chat
-  optimizer: claude-sonnet-4-20250514
-  target: claude-sonnet-4-20250514
+  optimizer: claude-sonnet-5
+  target: claude-sonnet-5
   optimizer_backend: claude_chat
   target_backend: claude_chat
   reasoning_effort: medium
