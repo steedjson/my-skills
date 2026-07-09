@@ -1,0 +1,7 @@
+[
+  {"id": "test-0", "query": "删除临时文件", "expected_effort": "low"},
+  {"id": "test-1", "query": "实现数据导出功能", "expected_effort": "medium"},
+  {"id": "test-2", "query": "优化数据库索引设计", "expected_effort": "high"},
+  {"id": "test-3", "query": "修复跨服务调用链路问题", "expected_effort": "xhigh"},
+  {"id": "test-4", "query": "修复SQL注入漏洞", "expected_effort": "max"}
+]
