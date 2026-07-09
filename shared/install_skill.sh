@@ -27,16 +27,26 @@ install_skill() {
 
   mkdir -p "$dest" "$dest/references" "$dest/scripts"
 
-  _dl() { curl -fsSL "$REPO_RAW/$skill_name/$1" -o "$dest/$1" && echo "  ↓ $1"; }
+  # 根据 USE_LOCAL 变量选择下载或复制
+  if [ "${USE_LOCAL:-false}" = true ]; then
+    _dl() { cp -v "$REPO_RAW/$skill_name/$1" "$dest/$1" && echo "  ↓ $1"; }
+    _dl_opt() { [ -f "$REPO_RAW/$skill_name/$1" ] && cp "$REPO_RAW/$skill_name/$1" "$dest/$1" 2>/dev/null || true; }
+  else
+    _dl() { curl -fsSL "$REPO_RAW/$skill_name/$1" -o "$dest/$1" && echo "  ↓ $1"; }
+    _dl_opt() { curl -fsSL "$REPO_RAW/$skill_name/$1" -o "$dest/$1" 2>/dev/null || true; }
+  fi
 
   _dl "SKILL.md"
   _dl "README.md"
-  [ -f "$dest/CHANGELOG.md" ] || curl -fsSL "$REPO_RAW/$skill_name/CHANGELOG.md" -o "$dest/CHANGELOG.md" 2>/dev/null || true
-  curl -fsSL "$REPO_RAW/$skill_name/references/sdk-examples.md" -o "$dest/references/sdk-examples.md" 2>/dev/null || true
+  _dl_opt "CHANGELOG.md"
+  _dl_opt "references/sdk-examples.md"
 
   for f in log_usage.py train_route_effort.py prepare_skillopt_env.py; do
-    curl -fsSL "$REPO_RAW/$skill_name/scripts/$f" -o "$dest/scripts/$f" 2>/dev/null && \
-      chmod +x "$dest/scripts/$f" || true
+    if [ "${USE_LOCAL:-false}" = true ]; then
+      [ -f "$REPO_RAW/$skill_name/scripts/$f" ] && cp "$REPO_RAW/$skill_name/scripts/$f" "$dest/scripts/$f" && chmod +x "$dest/scripts/$f" || true
+    else
+      curl -fsSL "$REPO_RAW/$skill_name/scripts/$f" -o "$dest/scripts/$f" 2>/dev/null && chmod +x "$dest/scripts/$f" || true
+    fi
   done
 
   if [ "$with_workflow" = true ]; then
