@@ -10,9 +10,12 @@
 **版本**: 2.4.0  
 **特性**:
 - 🎯 自动复杂度分析（15+ 维度决策树）
+- ✅ **SkillOpt 训练验证**（测试集准确率 80%，Soft 评分 0.950）
 - ⚡ SkillOpt 自适应学习（可选）
 - 🔧 Workflow 集成
 - 🛡️ 13 个安全修复（路径穿越、SQL 注入、secrets 泄露）
+
+> 📊 **v2.4.0 更新**：通过 50 个真实任务样本的 SkillOpt 训练验证，规则准确率达 80%。详见 [训练报告](./skillopt-training-summary.md) 和 [集成指南](./skillopt-integration-guide.md)。
 
 ---
 

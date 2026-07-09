@@ -65,15 +65,19 @@ Workflow({
 
 ## 路由规则速查
 
+**SkillOpt 训练验证：测试集准确率 80%，Soft 评分 0.950**
+
 | effort | 默认模型 | 典型场景 |
 |--------|----------|---------|
-| `low` | `haiku` | 格式化、重命名、grep 搜索 |
+| `low` | `haiku` | 格式化、重命名、文本替换、添加注释 |
 | `medium` | `sonnet` | 单文件 bug 修复、代码解释 |
 | `high` | `sonnet` | 多文件开发、架构分析、接口设计 |
-| `xhigh` | `fable` | 跨模块变更、复杂 bug 根因分析 |
-| `max` | `fable` | 安全审计、并发竞态、微妙算法 bug |
+| `xhigh` | `fable` | 跨模块重构、根因分析、影响评估 |
+| `max` | `fable` | 安全审计、并发 bug、关键算法修复 |
 
 完整规则、决策树、关键词指南见 [SKILL.md](./SKILL.md)。
+
+**训练方法**：基于 50 个真实任务样本（40 train + 5 val + 5 test）通过 SkillOpt 系统验证规则有效性。详见 [SkillOpt 训练报告](../skillopt-training-summary.md)。
 
 ---
 
