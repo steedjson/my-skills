@@ -335,3 +335,81 @@
     [rollout] 9/10 (acc=0.000) id=train-34 ✗ predicted=None expected=max
     [rollout] 10/10 (acc=0.000) id=train-19 ✗ predicted=None expected=xhigh
 [rollout] 完成! 准确率=0/10=0.000
+    [slow update] prev epoch hard=0.5000  curr epoch hard=0.4000
+    [slow update] comparison: regressed=2 improved=1 persistent_fail=4 stable_success=3 policy=mixed kept=10/10
+    [slow update] force-injected into current only (6116 chars), 174.1s
+
+  [SLOW UPDATE epoch 3 done] current=0.2000 best=0.2000
+
+  ============================================================
+  META SKILL — Epoch 3 (optimizer memory from epoch 2 vs 3)
+  ============================================================
+    [meta skill] memory written (2782 chars), 40.9s
+
+  [done] best skill from step 0, score=0.2000
+[rollout] 处理 5/5 任务 (workers=8)
+    [rollout] 1/5 (acc=0.000) id=val-0 ✗ predicted=low expected=low
+    [rollout] 2/5 (acc=0.000) id=val-4 ✗ predicted=max expected=max
+    [rollout] 3/5 (acc=0.000) id=val-1 ✗ predicted=max expected=medium
+    [rollout] 4/5 (acc=0.000) id=val-3 ✗ predicted=xhigh expected=xhigh
+    [rollout] 5/5 (acc=0.000) id=val-2 ✗ predicted=high expected=high
+[rollout] 完成! 准确率=0/5=0.000
+
+  [final skill val] items=5 final_selection_hard=0.8000 gate=0.8000 (best=0.2000)
+  [promote] final 0.8000 > best 0.2000 → final becomes new best (step 6, origin slow_update_epoch_03)
+
+============================================================
+  BASELINE TEST — evaluate initial skill on Test set (valid_unseen)
+============================================================
+  Test items: 5
+[rollout] 处理 5/5 任务 (workers=8)
+    [rollout] 1/5 (acc=0.000) id=test-3 ✗ predicted=xhigh expected=xhigh
+    [rollout] 2/5 (acc=0.000) id=test-0 ✗ predicted=None expected=low
+    [rollout] 3/5 (acc=0.000) id=test-2 ✗ predicted=None expected=high
+    [rollout] 4/5 (acc=0.000) id=test-1 ✗ predicted=high expected=medium
+    [rollout] 5/5 (acc=0.000) id=test-4 ✗ predicted=None expected=max
+[rollout] 完成! 准确率=0/5=0.000
+
+  === Baseline Test Results (S_0) ===
+    classification                          : hard=0/0=0.0000
+    overall                                 : hard=1.0/5=0.2000
+
+============================================================
+  BEST SKILL TEST — evaluate best skill on Test set (valid_unseen)
+============================================================
+  Test items: 5
+[rollout] 处理 5/5 任务 (workers=8)
+    [rollout] 1/5 (acc=0.000) id=test-3 ✗ predicted=xhigh expected=xhigh
+    [rollout] 2/5 (acc=0.000) id=test-2 ✗ predicted=high expected=high
+    [rollout] 3/5 (acc=0.000) id=test-1 ✗ predicted=high expected=medium
+    [rollout] 4/5 (acc=0.000) id=test-4 ✗ predicted=None expected=max
+    [rollout] 5/5 (acc=0.000) id=test-0 ✗ predicted=None expected=low
+[rollout] 完成! 准确率=0/5=0.000
+
+  === Best Skill Test Results ===
+    classification                          : hard=0/0=0.0000
+    overall                                 : hard=2.0/5=0.4000
+
+  [final skill == best skill] final_test_hard=0.4000 (reused)
+
+  === Improvement vs baseline (init S_0) ===
+    [2] best-on-val hard: 0.2000 -> 0.4000  (delta=+0.2000)
+    [3] final/last  hard: 0.2000 -> 0.4000  (delta=+0.2000)
+
+============================================================
+  Final Summary
+============================================================
+  steps=6 accept=0 reject=0 skip=6
+  best_score=0.8000 (step 6)  wall=1049s
+    epoch 1: accept=0 reject=0 best=0.2000
+    epoch 2: accept=0 reject=0 best=0.2000
+    epoch 3: accept=0 reject=0 best=0.2000
+
+  === TEST scores (3 skills, split=valid_unseen) ===
+    [1] init/baseline (S_0)          : test_hard=0.2000
+    [2] best-on-val (step 6)         : test_hard=0.4000 test_soft=0.5500
+    [3] final/last skill             : test_hard=0.4000 test_soft=0.5500
+  total tokens: 450,747 (prompt=281,940 completion=168,807 calls=184)
+
+  Output saved to: /Users/changsailong/BDSYNC/self/AI/tools/my-skills/route-effort/skill-opt/skillopt-out
+  Final test: 0.4000

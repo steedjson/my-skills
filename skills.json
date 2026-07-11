@@ -10,8 +10,17 @@
       "workflow": "effort-routed-task.js",
       "files": [
         "SKILL.md",
+        "README.md",
         "CHANGELOG.md",
-        "references/sdk-examples.md"
+        "references/sdk-examples.md",
+        "scripts/log_usage.py",
+        "scripts/train_route_effort.py",
+        "scripts/prepare_skillopt_env.py"
+      ],
+      "docs": [
+        "../docs/skillopt/deployment.md",
+        "../docs/skillopt/integration-guide.md",
+        "../docs/skillopt/training-summary.md"
       ]
     }
   ]

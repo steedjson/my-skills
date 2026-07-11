@@ -14,8 +14,9 @@
 - ⚡ SkillOpt 自适应学习（可选）
 - 🔧 Workflow 集成
 - 🛡️ 13 个安全修复（路径穿越、SQL 注入、secrets 泄露）
+- 🪨 **caveman 集成**：支持压缩输出模式（省 65% tokens）
 
-> 📊 **v2.4.0 更新**：通过 50 个真实任务样本的 SkillOpt 训练验证，规则准确率达 80%。详见 [训练报告](./skillopt-training-summary.md) 和 [集成指南](./skillopt-integration-guide.md)。
+> 📊 **v2.4.0 更新**：通过 50 个真实任务样本的 SkillOpt 训练验证，规则准确率达 80%。详见 [训练报告](./docs/skillopt/training-summary.md) 和 [集成指南](./docs/skillopt/integration-guide.md)。
 
 ---
 
@@ -76,7 +77,12 @@ my-skills/
 │       ├── log_usage.py
 │       ├── train_route_effort.py
 │       └── prepare_skillopt_env.py
-└── skills.json                 # skills 注册表
+├── docs/                       # 文档归档
+│   ├── setup/                  # Claude Code 设置指南
+│   ├── skillopt/               # SkillOpt 训练文档
+│   └── automation-recommendations.md
+├── skills.json                 # skills 注册表
+└── AGENTS.md                   # caveman 规则（通用）
 ```
 
 ---
@@ -88,6 +94,20 @@ my-skills/
 ```bash
 curl -fsSL https://raw.githubusercontent.com/steedjson/my-skills/main/install.sh | bash
 ```
+
+---
+
+## 🪨 caveman 集成
+
+本项目集成了 [caveman](https://github.com/JuliusBrussee/caveman) 压缩输出规则，支持：
+- **Cursor**: `.cursor/rules/caveman.mdc`
+- **Windsurf**: `.windsurf/rules/caveman.md`
+- **Cline**: `.clinerules/caveman.md`
+- **GitHub Copilot**: `.github/copilot-instructions.md`
+- **OpenCode**: `.opencode/AGENTS.md`
+- **通用**: `AGENTS.md`
+
+这些规则会让 AI 助手用压缩风格输出，节省约 65% tokens。Claude Code 通过插件自动启用。
 
 ---
 
