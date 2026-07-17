@@ -18,8 +18,11 @@ This skill evaluates OpenAI Codex models only. Never assign CodexRadar IQ values
 3. Read both sources:
    - `https://codexradar.com/`
    - `https://codexradar.com/api/model-ratings?history=15`
-4. Do not use remembered values. Report each source's update time.
-5. If either source cannot be read, state which data is unavailable and do not fabricate it.
+4. Fetch each source at most once per skill invocation. Fetch both in parallel when the host supports parallel tool calls.
+5. Treat both responses as one turn-local snapshot. Reuse that snapshot for parsing, recommendation, and presentation; do not fetch either source again during the normal workflow.
+6. Refetch an individual source only when its first request failed, its response is incomplete, the user explicitly requests a refresh, or more than 15 minutes have elapsed and current data is still required.
+7. Do not use remembered values from a prior skill invocation. Report each source's update time.
+8. If either source cannot be read after an allowed retry, state which data is unavailable and do not fabricate it.
 
 ## Interpret The Sources
 

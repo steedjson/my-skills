@@ -1,15 +1,4 @@
-route-effort-workspace/*
 .DS_Store
-.code-review-graph/*
-__pycache__
-route-effort/skill-opt/skillopt-out/*
-route-effort/skill-opt/training.log
-route-effort/skill-opt/training-improved.log
-
-# caveman plugin generated files (commit these for team-wide usage)
-# .cursor/
-# .windsurf/
-# .clinerules/
-# .github/copilot-instructions.md
-# .opencode/
-# AGENTS.md
+.code-review-graph/
+__pycache__/
+.claude/settings.local.json
