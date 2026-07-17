@@ -10,6 +10,15 @@
       "files": [
         "SKILL.md"
       ]
+    },
+    {
+      "name": "django-api-change",
+      "description": "Implement, debug, or review Django API and Service changes in the wework project",
+      "project": "wework",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml"
+      ]
     }
   ]
 }

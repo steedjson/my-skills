@@ -1,0 +1,4 @@
+interface:
+  display_name: "Django API 变更"
+  short_description: "按照项目约束实现并验证 Django API 变更"
+  default_prompt: "使用 $django-api-change 实现并验证这项 Django API 变更。"
