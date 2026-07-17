@@ -2,6 +2,8 @@
 
 个人 Claude Code skills 集合，专注于工作流优化和智能路由。
 
+> **命名说明**：GitHub repo 是 `steedjson/my-skills`，但安装后的包名是 `vlong`（安装路径 `~/.claude/skills/vlong/`）。这是历史命名，`my-skills` 是仓库/发布层名称，`vlong` 是包/运行时层名称。
+
 ## 📦 Skills 列表
 
 ### [route-effort](./route-effort/)
@@ -18,6 +20,10 @@
 
 > 📊 **v2.4.0 更新**：通过 50 个真实任务样本的 SkillOpt 训练验证，规则准确率达 80%。详见 [训练报告](./docs/skillopt/training-summary.md) 和 [集成指南](./docs/skillopt/integration-guide.md)。
 
+### [codexradar-model-advisor](./codexradar-model-advisor/)
+
+读取 CodexRadar 当前实测数据与 15 天社区评分历史，为 OpenAI Codex 模型和 reasoning effort 提供质量、速度、成本建议。仅推荐当前有实测数据的组合，支持 Codex、Claude Code 和其他 Agent Skills 兼容宿主。
+
 ---
 
 ## 🚀 快速开始
@@ -32,6 +38,10 @@ curl -fsSL https://raw.githubusercontent.com/steedjson/my-skills/main/install.sh
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/steedjson/my-skills/main/install.sh | bash -s -- route-effort
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/steedjson/my-skills/main/install.sh | bash -s -- codexradar-model-advisor
 ```
 
 **完整安装（含 Workflow + SkillOpt）**：
@@ -66,6 +76,8 @@ cd my-skills
 ```
 my-skills/
 ├── install.sh                  # 统一安装入口
+├── codexradar-model-advisor/   # CodexRadar 模型建议 skill
+│   └── SKILL.md                # 可移植 Agent Skills 定义
 ├── shared/
 │   └── install_skill.sh        # 共享安装函数
 ├── route-effort/               # route-effort skill

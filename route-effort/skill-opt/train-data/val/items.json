@@ -1,7 +1,0 @@
-[
-  {"id": "val-0", "query": "运行代码格式化工具", "expected_effort": "low"},
-  {"id": "val-1", "query": "实现用户登录功能", "expected_effort": "medium"},
-  {"id": "val-2", "query": "设计缓存失效策略", "expected_effort": "high"},
-  {"id": "val-3", "query": "重构支付流程", "expected_effort": "xhigh"},
-  {"id": "val-4", "query": "审计加密密钥管理", "expected_effort": "max"}
-]
