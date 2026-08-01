@@ -1,0 +1,4 @@
+interface:
+  display_name: "通用图片工作台"
+  short_description: "一句话生成、编辑并验证图片，兼容官方与自定义图片服务"
+  default_prompt: "使用 $image-workbench 根据我的描述生成图片，并自动选择可用模型与合适尺寸。"
