@@ -37,7 +37,7 @@ function supervisor(env: Record<string, string>, options: { timeoutMs?: number }
   });
 }
 
-test("preflights and applies exact Luna low, Luna max, and Sol xhigh settings", async (t) => {
+test("preflights exact settings without requiring settings notification", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "semantic-router-app-server-"));
   t.after(async () => {
     const { rm } = await import("node:fs/promises");
@@ -87,6 +87,48 @@ test("resolves installed model suffixes and downgrades unsupported max to highes
   assert.equal(
     resolved.selectionReason,
     "requested=gpt-5.6-luna | role=executor | model=gpt-5.6-luna-csap-codexbuy-oai | requested-effort=max -> resolved-effort=xhigh",
+  );
+});
+
+test("auto route falls back when provider rejects top-ranked model", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "semantic-router-model-fallback-"));
+  t.after(async () => {
+    const { rm } = await import("node:fs/promises");
+    await rm(root, { recursive: true, force: true });
+  });
+  const log = path.join(root, "fallback.jsonl");
+  const rejected = "deepseek-v4-flash-0731";
+  const fallback = "gpt-5.6-luna-csap-codexbuy-oai";
+  const models = [
+    {
+      id: rejected,
+      supportedReasoningEfforts: [{ reasoningEffort: "high" }, { reasoningEffort: "max" }],
+    },
+    {
+      id: fallback,
+      supportedReasoningEfforts: [{ reasoningEffort: "low" }, { reasoningEffort: "high" }, { reasoningEffort: "max" }],
+    },
+    {
+      id: "gpt-5.6-sol-csap-codexbuy-oai",
+      supportedReasoningEfforts: [{ reasoningEffort: "high" }, { reasoningEffort: "xhigh" }],
+    },
+  ];
+  const result = await supervisor({
+    FAKE_APP_SERVER_LOG: log,
+    FAKE_APP_SERVER_MODELS: JSON.stringify(models),
+    FAKE_APP_SERVER_UNSUPPORTED_MODEL: rejected,
+  }).runTurn("execute this", {
+    model: "auto",
+    effort: "max",
+    role: "executor",
+    sandbox: "read-only",
+  });
+  assert.equal(result.model, fallback);
+  assert.equal(result.effort, "max");
+  const requests = (await readFile(log, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  assert.deepEqual(
+    requests.filter((request) => request.method === "thread/start").map((request) => request.params.model),
+    [rejected, fallback],
   );
 });
 

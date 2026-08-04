@@ -22300,59 +22300,19 @@ var AppServerSupervisor = class {
     try {
       await client.initialize(combined);
       const models = await this.listModels(client, combined);
-      const resolvedTarget = resolveRoleTarget(models, target);
-      const threadStart = await client.request("thread/start", {
-        model: resolvedTarget.model,
-        allowProviderModelFallback: false,
-        ephemeral: true,
-        cwd: this.options.cwd ?? process3.cwd(),
-        sandbox: target.sandbox,
-        approvalPolicy: target.approvalPolicy ?? "never"
-      }, combined);
-      const threadId = readThreadId(threadStart);
-      if (!threadId) throw new AppServerTurnError("App Server did not return a thread id");
-      if (typeof threadStart.model === "string" && threadStart.model !== resolvedTarget.model) {
-        throw new ModelPreflightError("App Server selected unexpected model");
+      const resolvedTargets = resolveRoleTargets(models, target);
+      let lastError;
+      for (const [index, resolvedTarget] of resolvedTargets.entries()) {
+        try {
+          return await this.runResolvedTurn(client, prompt, target, resolvedTarget, combined);
+        } catch (error2) {
+          lastError = error2;
+          const canFallback = target.model === "auto" && index < resolvedTargets.length - 1 && isUnsupportedModelError(error2);
+          if (!canFallback) throw error2;
+          client.drainNotifications();
+        }
       }
-      await client.request("thread/settings/update", {
-        threadId,
-        model: resolvedTarget.model,
-        effort: resolvedTarget.effort
-      }, combined);
-      const settingsMessage = await client.waitForNotification(
-        (message) => message.method === "thread/settings/updated" && readThreadSettingsUpdated(message.params)?.threadId === threadId,
-        this.options.requestTimeoutMs,
-        combined
-      );
-      const settings = readThreadSettingsUpdated(settingsMessage.params)?.threadSettings;
-      if (settings?.model !== resolvedTarget.model || settings.effort !== resolvedTarget.effort) {
-        throw new ModelPreflightError("App Server did not apply exact model settings");
-      }
-      const turnStart = await client.request("turn/start", {
-        threadId,
-        input: [{ type: "text", text: prompt }]
-      }, combined);
-      const turnId = turnStart.turn?.id;
-      if (!turnId) throw new AppServerTurnError("App Server did not return a turn id");
-      const completedMessage = await client.waitForNotification(
-        (message) => message.method === "turn/completed" && matchesTurn(message.params, threadId, turnId),
-        this.options.requestTimeoutMs,
-        combined
-      );
-      const completed = readTurnCompleted(completedMessage.params);
-      const turn = completed?.turn;
-      if (!turn || turn.status !== "completed") {
-        throw new AppServerTurnError(redactText(turn?.error?.message ?? "App Server turn failed"));
-      }
-      return {
-        model: resolvedTarget.model,
-        effort: resolvedTarget.effort,
-        threadId,
-        turnId,
-        status: turn.status,
-        text: extractTurnText(turn, client.drainNotifications()),
-        ...resolvedTarget.selectionReason ? { selectionReason: resolvedTarget.selectionReason } : {}
-      };
+      throw lastError ?? new ModelPreflightError(`Requested model is unavailable: ${target.model}`);
     } catch (error2) {
       if (error2 instanceof AppServerClientError || error2 instanceof ModelPreflightError || error2 instanceof AppServerTurnError) {
         throw error2;
@@ -22389,37 +22349,82 @@ var AppServerSupervisor = class {
     } while (cursor);
     return models;
   }
+  async runResolvedTurn(client, prompt, target, resolvedTarget, signal) {
+    const threadStart = await client.request("thread/start", {
+      model: resolvedTarget.model,
+      allowProviderModelFallback: false,
+      ephemeral: true,
+      cwd: this.options.cwd ?? process3.cwd(),
+      sandbox: target.sandbox,
+      approvalPolicy: target.approvalPolicy ?? "never"
+    }, signal);
+    const threadId = readThreadId(threadStart);
+    if (!threadId) throw new AppServerTurnError("App Server did not return a thread id");
+    if (typeof threadStart.model === "string" && threadStart.model !== resolvedTarget.model) {
+      throw new ModelPreflightError("App Server selected unexpected model");
+    }
+    const settingsResult = await client.request("thread/settings/update", {
+      threadId,
+      model: resolvedTarget.model,
+      effort: resolvedTarget.effort
+    }, signal);
+    const settings = readThreadSettingsUpdated(settingsResult)?.threadSettings;
+    if (settings && (settings.model !== resolvedTarget.model || settings.effort !== resolvedTarget.effort)) {
+      throw new ModelPreflightError("App Server did not apply exact model settings");
+    }
+    const turnStart = await client.request("turn/start", {
+      threadId,
+      input: [{ type: "text", text: prompt }]
+    }, signal);
+    const turnId = turnStart.turn?.id;
+    if (!turnId) throw new AppServerTurnError("App Server did not return a turn id");
+    const completedMessage = await client.waitForNotification(
+      (message) => message.method === "turn/completed" && matchesTurn(message.params, threadId, turnId),
+      this.options.requestTimeoutMs,
+      signal
+    );
+    const completed = readTurnCompleted(completedMessage.params);
+    const turn = completed?.turn;
+    if (!turn || turn.status !== "completed") {
+      throw new AppServerTurnError(redactText(turn?.error?.message ?? "App Server turn failed"));
+    }
+    return {
+      model: resolvedTarget.model,
+      effort: resolvedTarget.effort,
+      threadId,
+      turnId,
+      status: turn.status,
+      text: extractTurnText(turn, client.drainNotifications()),
+      ...resolvedTarget.selectionReason ? { selectionReason: resolvedTarget.selectionReason } : {}
+    };
+  }
 };
-function resolveRoleTarget(models, target) {
-  const selection = selectModel(models, target);
-  if (!selection) throw new ModelPreflightError(`Requested model family is unavailable: ${target.model}`);
-  const model = selection.entry;
-  const modelId = model.id ?? model.model;
-  if (!modelId) throw new ModelPreflightError(`App Server returned unnamed model for ${target.model}`);
-  const supported = (model.supportedReasoningEfforts ?? []).map((entry) => entry.reasoningEffort).filter((effort2) => EFFORT_ORDER.includes(effort2));
+function resolveRoleTargets(models, target) {
+  return selectModels(models, target).map((selection) => roleTargetFromCandidate(target, selection));
+}
+function roleTargetFromCandidate(target, selection) {
   const role = target.role ?? inferRole(target.effort);
-  const effort = resolveEffort(supported, target.effort, minimumEffort(role));
-  const effortSelection = effort === target.effort ? `effort=${effort}` : `requested-effort=${target.effort} -> resolved-effort=${effort}`;
+  const effortSelection = selection.effort === target.effort ? `effort=${selection.effort}` : `requested-effort=${target.effort} -> resolved-effort=${selection.effort}`;
   const selectionReason = [
     target.model === "auto" ? "auto" : `requested=${target.model}`,
     `role=${role}`,
-    `model=${modelId}`,
+    `model=${selection.id}`,
     effortSelection
   ].join(" | ");
   return {
     ...target,
-    model: modelId,
-    effort,
+    model: selection.id,
+    effort: selection.effort,
     selectionReason
   };
 }
-function selectModel(models, target) {
+function selectModels(models, target) {
   const normalized = target.model.toLowerCase();
   const exact = models.find(
     (entry) => [entry.id, entry.model].some((value) => value?.toLowerCase() === normalized)
   );
   const family = modelFamily(target.model);
-  if (target.model !== "auto" && !exact && !family) return void 0;
+  if (target.model !== "auto" && !exact && !family) return [];
   const candidates = models.map((entry) => {
     const id = entry.id ?? entry.model;
     if (!id) return void 0;
@@ -22447,13 +22452,17 @@ function selectModel(models, target) {
   }).filter((candidate) => candidate !== void 0);
   return candidates.sort(
     (left, right) => right.score - left.score || left.id.toLowerCase().localeCompare(right.id.toLowerCase())
-  )[0];
+  );
 }
 function modelFamily(requested) {
   const normalized = requested.toLowerCase();
   if (normalized === "luna" || normalized.includes("luna")) return "luna";
   if (normalized === "sol" || normalized.includes("sol")) return "sol";
   return void 0;
+}
+function isUnsupportedModelError(error2) {
+  const message = error2 instanceof Error ? error2.message : String(error2);
+  return /unsupported[\s_-]+model/i.test(message);
 }
 function inferRole(effort) {
   if (effort === "low") return "classifier";

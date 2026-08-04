@@ -55,16 +55,25 @@ process.stdin.on("data", (chunk) => {
       send({ id: request.id, result: { data: models, nextCursor: null } });
     } else if (request.method === "thread/start") {
       threadId = `fake-thread-${Date.now()}`;
-      send({ id: request.id, result: { model: request.params.model, thread: { id: threadId } } });
+      if (process.env.FAKE_APP_SERVER_UNSUPPORTED_MODEL === request.params.model) {
+        send({
+          id: request.id,
+          error: { code: -32602, message: `Unsupported model: ${request.params.model}` },
+        });
+      } else {
+        send({ id: request.id, result: { model: request.params.model, thread: { id: threadId } } });
+      }
     } else if (request.method === "thread/settings/update") {
       send({ id: request.id, result: {} });
-      send({
-        method: "thread/settings/updated",
-        params: {
-          threadId: request.params.threadId,
-          threadSettings: { model: request.params.model, effort: request.params.effort },
-        },
-      });
+      if (process.env.FAKE_APP_SERVER_SEND_SETTINGS_NOTIFICATION === "1") {
+        send({
+          method: "thread/settings/updated",
+          params: {
+            threadId: request.params.threadId,
+            threadSettings: { model: request.params.model, effort: request.params.effort },
+          },
+        });
+      }
     } else if (request.method === "turn/start") {
       turnId = `fake-turn-${Date.now()}`;
       send({ id: request.id, result: { turn: { id: turnId, status: "inProgress" } } });
