@@ -1,0 +1,23 @@
+{
+  "name": "semantic-model-router",
+  "version": "0.1.0+codex.20260803180220",
+  "description": "Local control plane for semantic model routing in Codex",
+  "author": {
+    "name": "steedjson"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Semantic Model Router",
+    "shortDescription": "Route Codex work by task semantics.",
+    "longDescription": "Creates private prompt references and coordinates semantic routing through a local MCP control plane.",
+    "developerName": "steedjson",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Show semantic model router status."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

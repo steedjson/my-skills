@@ -1,0 +1,20 @@
+{
+  "name": "my-skills-local",
+  "interface": {
+    "displayName": "My Skills Local"
+  },
+  "plugins": [
+    {
+      "name": "semantic-model-router",
+      "source": {
+        "source": "local",
+        "path": "./semantic-model-router"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

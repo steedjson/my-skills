@@ -2,3 +2,6 @@
 .code-review-graph/
 __pycache__/
 .claude/settings.local.json
+.codegraph/
+.wolf/
+.claude/
