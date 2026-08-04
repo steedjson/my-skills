@@ -29,6 +29,7 @@ export function plannerPrompt(prompt: string): string {
     "You are semantic-model-router planning role.",
     "Return one JSON task packet only. Do not include chain-of-thought, secrets, full code, or a full diff.",
     "Required keys: goal, completion_definition, declared_scope, assumptions, evidence, prohibited_actions, steps, verification, acceptance_criteria, risk_tags, approval_points, major_deviation_rules.",
+    "completion_definition must be one concise string; do not return an array for this field.",
     "Every array must contain concise strings. Executor must re-read repository state before editing.",
     `User task:\n${prompt}`,
   ].join("\n");
@@ -50,12 +51,23 @@ export function parseTaskPacket(text: string): TaskPacket | undefined {
   ];
   if (typeof value.goal !== "string" || !value.goal.trim()) return undefined;
   if (strings.some((key) => key !== "goal" && !isStringArray(value[key]))) return undefined;
-  if (typeof value.completion_definition !== "string" || !value.completion_definition.trim()) return undefined;
+  const completionDefinition = value.completion_definition;
+  if (
+    !(
+      (typeof completionDefinition === "string" && completionDefinition.trim()) ||
+      isStringArray(completionDefinition)
+    )
+  ) {
+    return undefined;
+  }
   const riskTags = value.risk_tags;
   if (!Array.isArray(riskTags) || !riskTags.every((item) => typeof item === "string" && RISK_TAGS.has(item as RiskTag))) return undefined;
   return {
     goal: clean(value.goal),
-    completionDefinition: clean(value.completion_definition),
+    completionDefinition:
+      typeof completionDefinition === "string"
+        ? clean(completionDefinition)
+        : cleanArray(completionDefinition).join("; "),
     declaredScope: cleanArray(value.declared_scope),
     assumptions: cleanArray(value.assumptions),
     evidence: cleanArray(value.evidence),

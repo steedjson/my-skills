@@ -54,6 +54,24 @@ function packet(): string {
   });
 }
 
+test("planner parser normalizes array completion definitions", async () => {
+  const parsed = (await import("../../src/workflow/task-packet.js")).parseTaskPacket(JSON.stringify({
+    goal: "inspect repository",
+    completion_definition: ["architecture summarized", "tests listed"],
+    declared_scope: ["src"],
+    assumptions: ["read-only"],
+    evidence: ["source"],
+    prohibited_actions: ["no edits"],
+    steps: ["inspect"],
+    verification: ["tests"],
+    acceptance_criteria: ["summary complete"],
+    risk_tags: [],
+    approval_points: [],
+    major_deviation_rules: ["stop on scope expansion"],
+  }));
+  assert.equal(parsed?.completionDefinition, "architecture summarized; tests listed");
+});
+
 function review(status: "pass" | "repair", majorDeviation = false): string {
   return JSON.stringify({
     status,
@@ -97,6 +115,30 @@ test("classifier parser accepts fenced JSON and policy forces hard risk to appro
   assert.equal(decision.requiresApproval, true);
 });
 
+test("classifier parser normalizes unknown risk labels and fails closed to S", () => {
+  const parsed = parseClassifierResult(JSON.stringify({
+    route: "L",
+    confidence: 0.98,
+    risk_tags: ["architecture_reasoning", "read_only_review"],
+    ambiguity: 0.1,
+    scope: 0.2,
+    cross_module: 0.2,
+    unknown_context: 0.1,
+    reason_codes: ["explicit-scope"],
+    user_summary: "repository review",
+  }));
+  assert.equal(parsed?.riskTags.length, 0);
+  assert.equal(parsed?.confidence, 0.5);
+  assert.equal(parsed?.unknownContext, 1);
+  assert.ok(parsed?.reasonCodes.includes("classifier-unknown-risk-tags"));
+  const decision = decideRoute({
+    hardRiskTags: [],
+    classifier: parsed,
+  });
+  assert.equal(decision.route, "S");
+  assert.equal(decision.requiresApproval, false);
+});
+
 test("L route uses auto classifier then auto executor", async () => {
   const runner = new FakeRunner();
   const result = await runWorkflow(envelope(), runner);
@@ -120,12 +162,12 @@ test("S route runs planner, executor, and independent reviewer", async () => {
     runner.calls.map(({ target }) => `${target.role}/${target.model}/${target.effort}`),
     [
       "classifier/auto/low",
-      "planner/auto/xhigh",
+      "planner/sol/xhigh",
       "executor/auto/max",
-      "reviewer/auto/xhigh",
+      "reviewer/sol/xhigh",
     ],
   );
-  assert.match(result.receipt, /planner=auto\/xhigh -> executor=auto\/max -> reviewer=auto\/xhigh/);
+  assert.match(result.receipt, /planner=sol\/xhigh -> executor=auto\/max -> reviewer=sol\/xhigh/);
 });
 
 test("major deviation replans, while repair loop stays within call limits", async () => {

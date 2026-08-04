@@ -88,8 +88,8 @@ export class AppServerSupervisor {
     this.options = {
       command: options.command ?? "codex",
       args: options.args ?? ["app-server"],
-      timeoutMs: options.timeoutMs ?? 120_000,
-      requestTimeoutMs: options.requestTimeoutMs ?? 30_000,
+      timeoutMs: options.timeoutMs ?? 300_000,
+      requestTimeoutMs: options.requestTimeoutMs ?? 180_000,
       killGraceMs: options.killGraceMs ?? 1_000,
       cwd: options.cwd,
       env: options.env,
@@ -442,23 +442,26 @@ function readTurnCompleted(value: unknown): TurnCompletedParams | undefined {
 }
 
 function extractTurnText(turn: Turn, notifications: Array<{ method: string; params?: unknown }>): string {
-  const texts = (turn.items ?? [])
+  const completedTexts = (turn.items ?? [])
     .filter((item) => item.type === "agentMessage" && typeof item.text === "string")
     .map((item) => item.text as string);
+  if (completedTexts.length) return completedTexts.join("\n").trim();
+
+  const itemTexts: string[] = [];
+  const deltas: string[] = [];
   for (const notification of notifications) {
     if (notification.method === "item/completed" && isRecord(notification.params)) {
       const item = notification.params.item;
       if (isRecord(item) && item.type === "agentMessage" && typeof item.text === "string") {
-        texts.push(item.text);
+        itemTexts.push(item.text);
       }
     }
     if (notification.method === "item/agentMessage/delta" && isRecord(notification.params)) {
-      if (typeof notification.params.delta === "string") texts.push(notification.params.delta);
+      if (typeof notification.params.delta === "string") deltas.push(notification.params.delta);
     }
   }
-  return texts
-    .join("\n")
-    .trim();
+  if (itemTexts.length) return itemTexts.join("\n").trim();
+  return deltas.join("").trim();
 }
 
 function combineSignals(...signals: Array<AbortSignal | undefined>): AbortSignal {

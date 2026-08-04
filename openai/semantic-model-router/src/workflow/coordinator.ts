@@ -64,7 +64,7 @@ const CLASSIFIER_TARGET: RoleTarget = {
   approvalPolicy: "never",
 };
 const PLANNER_TARGET: RoleTarget = {
-  model: "auto",
+  model: "sol",
   effort: "xhigh",
   role: "planner",
   sandbox: "read-only",

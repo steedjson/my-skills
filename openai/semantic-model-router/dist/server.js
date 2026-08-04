@@ -22281,8 +22281,8 @@ var AppServerSupervisor = class {
     this.options = {
       command: options.command ?? "codex",
       args: options.args ?? ["app-server"],
-      timeoutMs: options.timeoutMs ?? 12e4,
-      requestTimeoutMs: options.requestTimeoutMs ?? 3e4,
+      timeoutMs: options.timeoutMs ?? 3e5,
+      requestTimeoutMs: options.requestTimeoutMs ?? 18e4,
       killGraceMs: options.killGraceMs ?? 1e3,
       cwd: options.cwd,
       env: options.env,
@@ -22554,19 +22554,23 @@ function readTurnCompleted(value) {
   return result;
 }
 function extractTurnText(turn, notifications) {
-  const texts = (turn.items ?? []).filter((item) => item.type === "agentMessage" && typeof item.text === "string").map((item) => item.text);
+  const completedTexts = (turn.items ?? []).filter((item) => item.type === "agentMessage" && typeof item.text === "string").map((item) => item.text);
+  if (completedTexts.length) return completedTexts.join("\n").trim();
+  const itemTexts = [];
+  const deltas = [];
   for (const notification of notifications) {
     if (notification.method === "item/completed" && isRecord(notification.params)) {
       const item = notification.params.item;
       if (isRecord(item) && item.type === "agentMessage" && typeof item.text === "string") {
-        texts.push(item.text);
+        itemTexts.push(item.text);
       }
     }
     if (notification.method === "item/agentMessage/delta" && isRecord(notification.params)) {
-      if (typeof notification.params.delta === "string") texts.push(notification.params.delta);
+      if (typeof notification.params.delta === "string") deltas.push(notification.params.delta);
     }
   }
-  return texts.join("\n").trim();
+  if (itemTexts.length) return itemTexts.join("\n").trim();
+  return deltas.join("").trim();
 }
 function combineSignals(...signals) {
   const controller = new AbortController();
@@ -22606,6 +22610,7 @@ function classifierPrompt(prompt) {
     "You are semantic-model-router classifier. Use the assigned model and reasoning effort only; do not assume a fixed provider or model family.",
     "Return JSON only. Never include chain-of-thought, secrets, code, or a full diff.",
     'Schema: {"route":"L"|"S","confidence":0..1,"risk_tags":[],"ambiguity":0..1,"scope":0..1,"cross_module":0..1,"unknown_context":0..1,"reason_codes":[string],"user_summary":string}.',
+    "risk_tags may contain only: destructive, external_side_effect, permission_or_security, schema_or_migration, credential_handling. If no exact tag applies, return []. Do not invent semantic labels.",
     "Use S when uncertain, cross-module, underspecified, or requiring architectural reasoning.",
     `Task:
 ${prompt}`
@@ -22624,24 +22629,29 @@ function parseClassifierResult(text) {
   if ([confidence, ambiguity, scope, crossModule, unknownContext].some((item) => item === void 0)) {
     return void 0;
   }
-  if (!Array.isArray(value.risk_tags) || !value.risk_tags.every((item) => typeof item === "string" && RISK_TAGS.has(item))) {
+  if (!Array.isArray(value.risk_tags) || !value.risk_tags.every((item) => typeof item === "string")) {
     return void 0;
   }
   if (!Array.isArray(value.reason_codes) || !value.reason_codes.every((item) => typeof item === "string" && item.length <= 80)) {
     return void 0;
   }
   if (typeof value.user_summary !== "string" || !value.user_summary.trim()) return void 0;
+  const rawRiskTags = value.risk_tags;
+  const riskTags = rawRiskTags.filter((item) => RISK_TAGS.has(item));
+  const unknownRiskTags = rawRiskTags.filter((item) => !RISK_TAGS.has(item));
+  const reasonCodes = value.reason_codes.map(
+    (item) => redactText(item).replace(/[\r\n]+/g, " ").slice(0, 80)
+  );
+  if (unknownRiskTags.length) reasonCodes.push("classifier-unknown-risk-tags");
   return {
     route,
-    confidence,
-    riskTags: value.risk_tags,
-    ambiguity,
+    confidence: unknownRiskTags.length ? Math.min(confidence, 0.5) : confidence,
+    riskTags,
+    ambiguity: unknownRiskTags.length ? Math.max(ambiguity, 0.8) : ambiguity,
     scope,
     crossModule,
-    unknownContext,
-    reasonCodes: value.reason_codes.map(
-      (item) => redactText(item).replace(/[\r\n]+/g, " ").slice(0, 80)
-    ),
+    unknownContext: unknownRiskTags.length ? 1 : unknownContext,
+    reasonCodes,
     userSummary: redactText(value.user_summary).replace(/[\r\n]+/g, " ").slice(0, 240)
   };
 }
@@ -22750,6 +22760,7 @@ function plannerPrompt(prompt) {
     "You are semantic-model-router planning role.",
     "Return one JSON task packet only. Do not include chain-of-thought, secrets, full code, or a full diff.",
     "Required keys: goal, completion_definition, declared_scope, assumptions, evidence, prohibited_actions, steps, verification, acceptance_criteria, risk_tags, approval_points, major_deviation_rules.",
+    "completion_definition must be one concise string; do not return an array for this field.",
     "Every array must contain concise strings. Executor must re-read repository state before editing.",
     `User task:
 ${prompt}`
@@ -22771,12 +22782,15 @@ function parseTaskPacket(text) {
   ];
   if (typeof value.goal !== "string" || !value.goal.trim()) return void 0;
   if (strings.some((key) => key !== "goal" && !isStringArray(value[key]))) return void 0;
-  if (typeof value.completion_definition !== "string" || !value.completion_definition.trim()) return void 0;
+  const completionDefinition = value.completion_definition;
+  if (!(typeof completionDefinition === "string" && completionDefinition.trim() || isStringArray(completionDefinition))) {
+    return void 0;
+  }
   const riskTags = value.risk_tags;
   if (!Array.isArray(riskTags) || !riskTags.every((item) => typeof item === "string" && RISK_TAGS2.has(item))) return void 0;
   return {
     goal: clean(value.goal),
-    completionDefinition: clean(value.completion_definition),
+    completionDefinition: typeof completionDefinition === "string" ? clean(completionDefinition) : cleanArray(completionDefinition).join("; "),
     declaredScope: cleanArray(value.declared_scope),
     assumptions: cleanArray(value.assumptions),
     evidence: cleanArray(value.evidence),
@@ -22880,7 +22894,7 @@ var CLASSIFIER_TARGET = {
   approvalPolicy: "never"
 };
 var PLANNER_TARGET = {
-  model: "auto",
+  model: "sol",
   effort: "xhigh",
   role: "planner",
   sandbox: "read-only",

@@ -28,6 +28,7 @@ export function classifierPrompt(prompt: string): string {
     "You are semantic-model-router classifier. Use the assigned model and reasoning effort only; do not assume a fixed provider or model family.",
     "Return JSON only. Never include chain-of-thought, secrets, code, or a full diff.",
     'Schema: {"route":"L"|"S","confidence":0..1,"risk_tags":[],"ambiguity":0..1,"scope":0..1,"cross_module":0..1,"unknown_context":0..1,"reason_codes":[string],"user_summary":string}.',
+    "risk_tags may contain only: destructive, external_side_effect, permission_or_security, schema_or_migration, credential_handling. If no exact tag applies, return []. Do not invent semantic labels.",
     "Use S when uncertain, cross-module, underspecified, or requiring architectural reasoning.",
     `Task:\n${prompt}`,
   ].join("\n");
@@ -46,24 +47,29 @@ export function parseClassifierResult(text: string): ClassifierResult | undefine
   if ([confidence, ambiguity, scope, crossModule, unknownContext].some((item) => item === undefined)) {
     return undefined;
   }
-  if (!Array.isArray(value.risk_tags) || !value.risk_tags.every((item) => typeof item === "string" && RISK_TAGS.has(item as RiskTag))) {
+  if (!Array.isArray(value.risk_tags) || !value.risk_tags.every((item) => typeof item === "string")) {
     return undefined;
   }
   if (!Array.isArray(value.reason_codes) || !value.reason_codes.every((item) => typeof item === "string" && item.length <= 80)) {
     return undefined;
   }
   if (typeof value.user_summary !== "string" || !value.user_summary.trim()) return undefined;
+  const rawRiskTags = value.risk_tags as string[];
+  const riskTags = rawRiskTags.filter((item): item is RiskTag => RISK_TAGS.has(item as RiskTag));
+  const unknownRiskTags = rawRiskTags.filter((item) => !RISK_TAGS.has(item as RiskTag));
+  const reasonCodes = (value.reason_codes as string[]).map((item) =>
+    redactText(item).replace(/[\r\n]+/g, " ").slice(0, 80),
+  );
+  if (unknownRiskTags.length) reasonCodes.push("classifier-unknown-risk-tags");
   return {
     route,
-    confidence: confidence as number,
-    riskTags: value.risk_tags as RiskTag[],
-    ambiguity: ambiguity as number,
+    confidence: unknownRiskTags.length ? Math.min(confidence as number, 0.5) : confidence as number,
+    riskTags,
+    ambiguity: unknownRiskTags.length ? Math.max(ambiguity as number, 0.8) : ambiguity as number,
     scope: scope as number,
     crossModule: crossModule as number,
-    unknownContext: unknownContext as number,
-    reasonCodes: (value.reason_codes as string[]).map((item) =>
-      redactText(item).replace(/[\r\n]+/g, " ").slice(0, 80),
-    ),
+    unknownContext: unknownRiskTags.length ? 1 : unknownContext as number,
+    reasonCodes,
     userSummary: redactText(value.user_summary).replace(/[\r\n]+/g, " ").slice(0, 240),
   };
 }

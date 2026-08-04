@@ -116,13 +116,27 @@ process.stdin.on("data", (chunk) => {
             summary: "fake review passed",
           });
         }
+        const completedTurn = failed
+          ? { id: turnId, status: "failed", error: { message: "provider request id=req_secret https://private.example" } }
+          : { id: turnId, status: "completed", items: [{ id: "message-1", type: "agentMessage", text: responseText }] };
+        if (!failed && process.env.FAKE_APP_SERVER_DUPLICATE_TEXT === "1") {
+          send({
+            method: "item/agentMessage/delta",
+            params: { threadId: request.params.threadId, delta: responseText },
+          });
+          send({
+            method: "item/completed",
+            params: {
+              threadId: request.params.threadId,
+              item: { id: "message-1", type: "agentMessage", text: responseText },
+            },
+          });
+        }
         send({
           method: "turn/completed",
           params: {
             threadId: request.params.threadId,
-            turn: failed
-              ? { id: turnId, status: "failed", error: { message: "provider request id=req_secret https://private.example" } }
-              : { id: turnId, status: "completed", items: [{ id: "message-1", type: "agentMessage", text: responseText }] },
+            turn: completedTurn,
           },
         });
       }

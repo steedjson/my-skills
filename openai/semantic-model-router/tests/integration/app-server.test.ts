@@ -68,6 +68,16 @@ test("preflights exact settings without requiring settings notification", async 
   }
 });
 
+test("uses canonical completed turn text instead of duplicating deltas", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "semantic-router-app-server-text-"));
+  t.after(async () => {
+    const { rm } = await import("node:fs/promises");
+    await rm(root, { recursive: true, force: true });
+  });
+  const result = await supervisor({ FAKE_APP_SERVER_DUPLICATE_TEXT: "1" }).runTurn("classify this", lunaLow);
+  assert.equal(result.text, "fake result");
+});
+
 test("resolves installed model suffixes and downgrades unsupported max to highest available effort", () => {
   const resolved = resolveRoleTarget(
     [

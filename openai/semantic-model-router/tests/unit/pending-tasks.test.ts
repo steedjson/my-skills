@@ -110,9 +110,9 @@ test("high-risk route persists pending task and approval resumes bounded workflo
     runner.calls.map((target) => `${target.role}/${target.model}/${target.effort}`),
     [
       "classifier/auto/low",
-      "planner/auto/xhigh",
+      "planner/sol/xhigh",
       "executor/auto/max",
-      "reviewer/auto/xhigh",
+      "reviewer/sol/xhigh",
     ],
   );
   await assert.rejects(
