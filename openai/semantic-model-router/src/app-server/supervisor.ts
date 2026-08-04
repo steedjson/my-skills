@@ -15,12 +15,17 @@ import {
 
 export type ReasoningEffort = "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
 export type SandboxMode = "read-only" | "workspace-write" | "danger-full-access";
+export type ModelRole = "classifier" | "planner" | "executor" | "reviewer";
+export type ModelFamily = "luna" | "sol";
 
 export interface RoleTarget {
   model: string;
   effort: ReasoningEffort;
   sandbox: SandboxMode;
+  role?: ModelRole;
+  currentModel?: string;
   approvalPolicy?: "untrusted" | "on-request" | "never";
+  selectionReason?: string;
 }
 
 export interface AppServerTurnResult {
@@ -30,7 +35,17 @@ export interface AppServerTurnResult {
   turnId: string;
   status: string;
   text: string;
+  selectionReason?: string;
 }
+
+const EFFORT_ORDER: readonly ReasoningEffort[] = [
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+  "ultra",
+];
 
 export interface AppServerSupervisorOptions {
   command?: string;
@@ -97,9 +112,9 @@ export class AppServerSupervisor {
     try {
       await client.initialize(combined);
       const models = await this.listModels(client, combined);
-      this.assertModel(models, target);
+      const resolvedTarget = resolveRoleTarget(models, target);
       const threadStart = await client.request<Record<string, unknown>>("thread/start", {
-        model: target.model,
+        model: resolvedTarget.model,
         allowProviderModelFallback: false,
         ephemeral: true,
         cwd: this.options.cwd ?? process.cwd(),
@@ -108,13 +123,13 @@ export class AppServerSupervisor {
       }, combined);
       const threadId = readThreadId(threadStart);
       if (!threadId) throw new AppServerTurnError("App Server did not return a thread id");
-      if (typeof threadStart.model === "string" && threadStart.model !== target.model) {
+      if (typeof threadStart.model === "string" && threadStart.model !== resolvedTarget.model) {
         throw new ModelPreflightError("App Server selected unexpected model");
       }
       await client.request("thread/settings/update", {
         threadId,
-        model: target.model,
-        effort: target.effort,
+        model: resolvedTarget.model,
+        effort: resolvedTarget.effort,
       }, combined);
       const settingsMessage = await client.waitForNotification(
         (message) =>
@@ -124,7 +139,7 @@ export class AppServerSupervisor {
         combined,
       );
       const settings = readThreadSettingsUpdated(settingsMessage.params)?.threadSettings;
-      if (settings?.model !== target.model || settings.effort !== target.effort) {
+      if (settings?.model !== resolvedTarget.model || settings.effort !== resolvedTarget.effort) {
         throw new ModelPreflightError("App Server did not apply exact model settings");
       }
       const turnStart = await client.request<TurnStartResult>("turn/start", {
@@ -146,12 +161,15 @@ export class AppServerSupervisor {
         throw new AppServerTurnError(redactText(turn?.error?.message ?? "App Server turn failed"));
       }
       return {
-        model: target.model,
-        effort: target.effort,
+        model: resolvedTarget.model,
+        effort: resolvedTarget.effort,
         threadId,
         turnId,
         status: turn.status,
         text: extractTurnText(turn, client.drainNotifications()),
+        ...(resolvedTarget.selectionReason
+          ? { selectionReason: resolvedTarget.selectionReason }
+          : {}),
       };
     } catch (error) {
       if (error instanceof AppServerClientError || error instanceof ModelPreflightError || error instanceof AppServerTurnError) {
@@ -192,14 +210,150 @@ export class AppServerSupervisor {
     return models;
   }
 
-  private assertModel(models: ModelListEntry[], target: RoleTarget): void {
-    const model = models.find((entry) => entry.id === target.model || entry.model === target.model);
-    if (!model) throw new ModelPreflightError(`Requested model is unavailable: ${target.model}`);
-    const efforts = model.supportedReasoningEfforts ?? [];
-    if (!efforts.some((entry) => entry.reasoningEffort === target.effort)) {
-      throw new ModelPreflightError(`Requested effort is unavailable: ${target.model}/${target.effort}`);
-    }
+}
+
+export function resolveRoleTarget(models: ModelListEntry[], target: RoleTarget): RoleTarget {
+  const selection = selectModel(models, target);
+  if (!selection) throw new ModelPreflightError(`Requested model family is unavailable: ${target.model}`);
+  const model = selection.entry;
+  const modelId = model.id ?? model.model;
+  if (!modelId) throw new ModelPreflightError(`App Server returned unnamed model for ${target.model}`);
+  const supported = (model.supportedReasoningEfforts ?? [])
+    .map((entry) => entry.reasoningEffort)
+    .filter((effort): effort is ReasoningEffort => EFFORT_ORDER.includes(effort as ReasoningEffort));
+  const role = target.role ?? inferRole(target.effort);
+  const effort = resolveEffort(supported, target.effort, minimumEffort(role));
+  const effortSelection =
+    effort === target.effort
+      ? `effort=${effort}`
+      : `requested-effort=${target.effort} -> resolved-effort=${effort}`;
+  const selectionReason = [
+    target.model === "auto" ? "auto" : `requested=${target.model}`,
+    `role=${role}`,
+    `model=${modelId}`,
+    effortSelection,
+  ].join(" | ");
+  return {
+    ...target,
+    model: modelId,
+    effort,
+    selectionReason,
+  };
+}
+
+interface ModelCandidate {
+  entry: ModelListEntry;
+  id: string;
+  effort: ReasoningEffort;
+  score: number;
+}
+
+function selectModel(
+  models: ModelListEntry[],
+  target: RoleTarget,
+): ModelCandidate | undefined {
+  const normalized = target.model.toLowerCase();
+  const exact = models.find((entry) =>
+    [entry.id, entry.model].some((value) => value?.toLowerCase() === normalized),
+  );
+  const family = modelFamily(target.model);
+  if (target.model !== "auto" && !exact && !family) return undefined;
+  const candidates = models
+    .map((entry): ModelCandidate | undefined => {
+      const id = entry.id ?? entry.model;
+      if (!id) return undefined;
+      const entryName = [entry.id, entry.model].filter(Boolean).join(" ").toLowerCase();
+      if (exact && entry !== exact) return undefined;
+      if (family && !entryName.includes(family)) return undefined;
+      const supported = (entry.supportedReasoningEfforts ?? [])
+        .map((item) => item.reasoningEffort)
+        .filter((effort): effort is ReasoningEffort => EFFORT_ORDER.includes(effort as ReasoningEffort));
+      let effort: ReasoningEffort;
+      try {
+        effort = resolveEffort(supported, target.effort, minimumEffort(target.role ?? inferRole(target.effort)));
+      } catch {
+        return undefined;
+      }
+      const role = target.role ?? inferRole(target.effort);
+      const traits = modelTraits(id);
+      const fit = role === "planner" || role === "reviewer" ? traits.reasoningFit : traits.executionFit;
+      const downgrade = EFFORT_ORDER.indexOf(target.effort) - EFFORT_ORDER.indexOf(effort);
+      const currentBonus = target.currentModel && entryName.includes(target.currentModel.toLowerCase()) ? 4 : 0;
+      return {
+        entry,
+        id,
+        effort,
+        score: fit * 100 - traits.costTier * 10 - downgrade * 8 + currentBonus,
+      };
+    })
+    .filter((candidate): candidate is ModelCandidate => candidate !== undefined);
+
+  return candidates.sort((left, right) =>
+    right.score - left.score ||
+    left.id.toLowerCase().localeCompare(right.id.toLowerCase()),
+  )[0];
+}
+
+function modelFamily(requested: string): ModelFamily | undefined {
+  const normalized = requested.toLowerCase();
+  if (normalized === "luna" || normalized.includes("luna")) return "luna";
+  if (normalized === "sol" || normalized.includes("sol")) return "sol";
+  return undefined;
+}
+
+function inferRole(effort: ReasoningEffort): ModelRole {
+  if (effort === "low") return "classifier";
+  if (effort === "xhigh" || effort === "ultra") return "planner";
+  return "executor";
+}
+
+function minimumEffort(role: ModelRole): ReasoningEffort {
+  switch (role) {
+    case "planner":
+    case "reviewer":
+      return "high";
+    case "classifier":
+      return "low";
+    case "executor":
+      return "high";
   }
+}
+
+function modelTraits(modelId: string): {
+  costTier: number;
+  reasoningFit: number;
+  executionFit: number;
+} {
+  const name = modelId.toLowerCase();
+  const cheap = /(mini|nano|flash|haiku|luna|fast|small)/.test(name);
+  const reasoning = /(sol|reason|opus|o[1345](?:[-.]|$)|pro|think)/.test(name);
+  const balanced = /(terra|sonnet|gpt-5\.[456]|gpt-4)/.test(name);
+  return {
+    costTier: cheap ? 0 : reasoning ? 2 : balanced ? 1 : 1,
+    reasoningFit: reasoning ? 3 : balanced ? 2 : 1,
+    executionFit: cheap ? 3 : balanced ? 2 : reasoning ? 1 : 2,
+  };
+}
+
+function resolveEffort(
+  supported: ReasoningEffort[],
+  requested: ReasoningEffort,
+  minimum: ReasoningEffort = "low",
+): ReasoningEffort {
+  if (
+    supported.includes(requested) &&
+    EFFORT_ORDER.indexOf(requested) >= EFFORT_ORDER.indexOf(minimum)
+  ) {
+    return requested;
+  }
+  const requestedIndex = EFFORT_ORDER.indexOf(requested);
+  const fallback = [...supported]
+    .filter((effort) => EFFORT_ORDER.indexOf(effort) < requestedIndex)
+    .sort((left, right) => EFFORT_ORDER.indexOf(right) - EFFORT_ORDER.indexOf(left))[0];
+  if (!fallback || EFFORT_ORDER.indexOf(fallback) < EFFORT_ORDER.indexOf(minimum)) {
+    throw new ModelPreflightError(`Requested effort is unavailable: ${requested}`);
+  }
+  return fallback;
 }
 
 function readThreadId(value: unknown): string | undefined {

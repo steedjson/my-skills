@@ -78,6 +78,9 @@ export class AppServerClient {
         name: "semantic-model-router",
         version: "0.1.0",
       },
+      capabilities: {
+        experimentalApi: true,
+      },
     }, signal);
     this.notify("initialized", {});
   }

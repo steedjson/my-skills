@@ -35,7 +35,7 @@ class ApprovalRunner implements TurnRunner {
   async runTurn(_prompt: string, target: RoleTarget): Promise<AppServerTurnResult> {
     this.calls.push(target);
     let text = "completed";
-    if (target.model === "gpt-5.6-luna" && target.effort === "low") {
+    if (target.role === "classifier") {
       text = JSON.stringify({
         route: "L",
         confidence: 1,
@@ -47,7 +47,7 @@ class ApprovalRunner implements TurnRunner {
         reason_codes: ["test"],
         user_summary: "approved test",
       });
-    } else if (target.model === "gpt-5.6-sol" && target.effort === "xhigh") {
+    } else if (target.role === "planner") {
       text = JSON.stringify({
         goal: "approved goal",
         completion_definition: "done",
@@ -62,14 +62,13 @@ class ApprovalRunner implements TurnRunner {
         approval_points: ["before delete"],
         major_deviation_rules: [],
       });
-      if (_prompt.includes("reviewer")) {
-        text = JSON.stringify({
-          status: "pass",
-          major_deviation: false,
-          issues: [],
-          summary: "approved",
-        });
-      }
+    } else if (target.role === "reviewer") {
+      text = JSON.stringify({
+        status: "pass",
+        major_deviation: false,
+        issues: [],
+        summary: "approved",
+      });
     }
     return {
       model: target.model,
@@ -108,8 +107,13 @@ test("high-risk route persists pending task and approval resumes bounded workflo
   );
   assert.equal(completed.status, "succeeded");
   assert.deepEqual(
-    runner.calls.map((target) => `${target.model}/${target.effort}`),
-    ["gpt-5.6-luna/low", "gpt-5.6-sol/xhigh", "gpt-5.6-luna/max", "gpt-5.6-sol/xhigh"],
+    runner.calls.map((target) => `${target.role}/${target.model}/${target.effort}`),
+    [
+      "classifier/auto/low",
+      "planner/auto/xhigh",
+      "executor/auto/max",
+      "reviewer/auto/xhigh",
+    ],
   );
   await assert.rejects(
     () => approvePendingTask(root, pending.taskId as string, pending.approvalToken as string),

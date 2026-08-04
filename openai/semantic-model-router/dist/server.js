@@ -22116,6 +22116,9 @@ var AppServerClient = class {
       clientInfo: {
         name: "semantic-model-router",
         version: "0.1.0"
+      },
+      capabilities: {
+        experimentalApi: true
       }
     }, signal);
     this.notify("initialized", {});
@@ -22252,6 +22255,14 @@ var AppServerClient = class {
 };
 
 // src/app-server/supervisor.ts
+var EFFORT_ORDER = [
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+  "ultra"
+];
 var ModelPreflightError = class extends Error {
   constructor(message) {
     super(message);
@@ -22289,9 +22300,9 @@ var AppServerSupervisor = class {
     try {
       await client.initialize(combined);
       const models = await this.listModels(client, combined);
-      this.assertModel(models, target);
+      const resolvedTarget = resolveRoleTarget(models, target);
       const threadStart = await client.request("thread/start", {
-        model: target.model,
+        model: resolvedTarget.model,
         allowProviderModelFallback: false,
         ephemeral: true,
         cwd: this.options.cwd ?? process3.cwd(),
@@ -22300,13 +22311,13 @@ var AppServerSupervisor = class {
       }, combined);
       const threadId = readThreadId(threadStart);
       if (!threadId) throw new AppServerTurnError("App Server did not return a thread id");
-      if (typeof threadStart.model === "string" && threadStart.model !== target.model) {
+      if (typeof threadStart.model === "string" && threadStart.model !== resolvedTarget.model) {
         throw new ModelPreflightError("App Server selected unexpected model");
       }
       await client.request("thread/settings/update", {
         threadId,
-        model: target.model,
-        effort: target.effort
+        model: resolvedTarget.model,
+        effort: resolvedTarget.effort
       }, combined);
       const settingsMessage = await client.waitForNotification(
         (message) => message.method === "thread/settings/updated" && readThreadSettingsUpdated(message.params)?.threadId === threadId,
@@ -22314,7 +22325,7 @@ var AppServerSupervisor = class {
         combined
       );
       const settings = readThreadSettingsUpdated(settingsMessage.params)?.threadSettings;
-      if (settings?.model !== target.model || settings.effort !== target.effort) {
+      if (settings?.model !== resolvedTarget.model || settings.effort !== resolvedTarget.effort) {
         throw new ModelPreflightError("App Server did not apply exact model settings");
       }
       const turnStart = await client.request("turn/start", {
@@ -22334,12 +22345,13 @@ var AppServerSupervisor = class {
         throw new AppServerTurnError(redactText(turn?.error?.message ?? "App Server turn failed"));
       }
       return {
-        model: target.model,
-        effort: target.effort,
+        model: resolvedTarget.model,
+        effort: resolvedTarget.effort,
         threadId,
         turnId,
         status: turn.status,
-        text: extractTurnText(turn, client.drainNotifications())
+        text: extractTurnText(turn, client.drainNotifications()),
+        ...resolvedTarget.selectionReason ? { selectionReason: resolvedTarget.selectionReason } : {}
       };
     } catch (error2) {
       if (error2 instanceof AppServerClientError || error2 instanceof ModelPreflightError || error2 instanceof AppServerTurnError) {
@@ -22377,15 +22389,110 @@ var AppServerSupervisor = class {
     } while (cursor);
     return models;
   }
-  assertModel(models, target) {
-    const model = models.find((entry) => entry.id === target.model || entry.model === target.model);
-    if (!model) throw new ModelPreflightError(`Requested model is unavailable: ${target.model}`);
-    const efforts = model.supportedReasoningEfforts ?? [];
-    if (!efforts.some((entry) => entry.reasoningEffort === target.effort)) {
-      throw new ModelPreflightError(`Requested effort is unavailable: ${target.model}/${target.effort}`);
-    }
-  }
 };
+function resolveRoleTarget(models, target) {
+  const selection = selectModel(models, target);
+  if (!selection) throw new ModelPreflightError(`Requested model family is unavailable: ${target.model}`);
+  const model = selection.entry;
+  const modelId = model.id ?? model.model;
+  if (!modelId) throw new ModelPreflightError(`App Server returned unnamed model for ${target.model}`);
+  const supported = (model.supportedReasoningEfforts ?? []).map((entry) => entry.reasoningEffort).filter((effort2) => EFFORT_ORDER.includes(effort2));
+  const role = target.role ?? inferRole(target.effort);
+  const effort = resolveEffort(supported, target.effort, minimumEffort(role));
+  const effortSelection = effort === target.effort ? `effort=${effort}` : `requested-effort=${target.effort} -> resolved-effort=${effort}`;
+  const selectionReason = [
+    target.model === "auto" ? "auto" : `requested=${target.model}`,
+    `role=${role}`,
+    `model=${modelId}`,
+    effortSelection
+  ].join(" | ");
+  return {
+    ...target,
+    model: modelId,
+    effort,
+    selectionReason
+  };
+}
+function selectModel(models, target) {
+  const normalized = target.model.toLowerCase();
+  const exact = models.find(
+    (entry) => [entry.id, entry.model].some((value) => value?.toLowerCase() === normalized)
+  );
+  const family = modelFamily(target.model);
+  if (target.model !== "auto" && !exact && !family) return void 0;
+  const candidates = models.map((entry) => {
+    const id = entry.id ?? entry.model;
+    if (!id) return void 0;
+    const entryName = [entry.id, entry.model].filter(Boolean).join(" ").toLowerCase();
+    if (exact && entry !== exact) return void 0;
+    if (family && !entryName.includes(family)) return void 0;
+    const supported = (entry.supportedReasoningEfforts ?? []).map((item) => item.reasoningEffort).filter((effort2) => EFFORT_ORDER.includes(effort2));
+    let effort;
+    try {
+      effort = resolveEffort(supported, target.effort, minimumEffort(target.role ?? inferRole(target.effort)));
+    } catch {
+      return void 0;
+    }
+    const role = target.role ?? inferRole(target.effort);
+    const traits = modelTraits(id);
+    const fit = role === "planner" || role === "reviewer" ? traits.reasoningFit : traits.executionFit;
+    const downgrade = EFFORT_ORDER.indexOf(target.effort) - EFFORT_ORDER.indexOf(effort);
+    const currentBonus = target.currentModel && entryName.includes(target.currentModel.toLowerCase()) ? 4 : 0;
+    return {
+      entry,
+      id,
+      effort,
+      score: fit * 100 - traits.costTier * 10 - downgrade * 8 + currentBonus
+    };
+  }).filter((candidate) => candidate !== void 0);
+  return candidates.sort(
+    (left, right) => right.score - left.score || left.id.toLowerCase().localeCompare(right.id.toLowerCase())
+  )[0];
+}
+function modelFamily(requested) {
+  const normalized = requested.toLowerCase();
+  if (normalized === "luna" || normalized.includes("luna")) return "luna";
+  if (normalized === "sol" || normalized.includes("sol")) return "sol";
+  return void 0;
+}
+function inferRole(effort) {
+  if (effort === "low") return "classifier";
+  if (effort === "xhigh" || effort === "ultra") return "planner";
+  return "executor";
+}
+function minimumEffort(role) {
+  switch (role) {
+    case "planner":
+    case "reviewer":
+      return "high";
+    case "classifier":
+      return "low";
+    case "executor":
+      return "high";
+  }
+}
+function modelTraits(modelId) {
+  const name = modelId.toLowerCase();
+  const cheap = /(mini|nano|flash|haiku|luna|fast|small)/.test(name);
+  const reasoning = /(sol|reason|opus|o[1345](?:[-.]|$)|pro|think)/.test(name);
+  const balanced = /(terra|sonnet|gpt-5\.[456]|gpt-4)/.test(name);
+  return {
+    costTier: cheap ? 0 : reasoning ? 2 : balanced ? 1 : 1,
+    reasoningFit: reasoning ? 3 : balanced ? 2 : 1,
+    executionFit: cheap ? 3 : balanced ? 2 : reasoning ? 1 : 2
+  };
+}
+function resolveEffort(supported, requested, minimum = "low") {
+  if (supported.includes(requested) && EFFORT_ORDER.indexOf(requested) >= EFFORT_ORDER.indexOf(minimum)) {
+    return requested;
+  }
+  const requestedIndex = EFFORT_ORDER.indexOf(requested);
+  const fallback = [...supported].filter((effort) => EFFORT_ORDER.indexOf(effort) < requestedIndex).sort((left, right) => EFFORT_ORDER.indexOf(right) - EFFORT_ORDER.indexOf(left))[0];
+  if (!fallback || EFFORT_ORDER.indexOf(fallback) < EFFORT_ORDER.indexOf(minimum)) {
+    throw new ModelPreflightError(`Requested effort is unavailable: ${requested}`);
+  }
+  return fallback;
+}
 function readThreadId(value) {
   if (!isRecord(value)) return void 0;
   const thread = value.thread;
@@ -22487,7 +22594,7 @@ var RISK_TAGS = /* @__PURE__ */ new Set([
 ]);
 function classifierPrompt(prompt) {
   return [
-    "You are semantic-model-router classifier.",
+    "You are semantic-model-router classifier. Use the assigned model and reasoning effort only; do not assume a fixed provider or model family.",
     "Return JSON only. Never include chain-of-thought, secrets, code, or a full diff.",
     'Schema: {"route":"L"|"S","confidence":0..1,"risk_tags":[],"ambiguity":0..1,"scope":0..1,"cross_module":0..1,"unknown_context":0..1,"reason_codes":[string],"user_summary":string}.',
     "Use S when uncertain, cross-module, underspecified, or requiring architectural reasoning.",
@@ -22631,7 +22738,7 @@ var RISK_TAGS2 = /* @__PURE__ */ new Set([
 ]);
 function plannerPrompt(prompt) {
   return [
-    "You are Sol planner for semantic-model-router.",
+    "You are semantic-model-router planning role.",
     "Return one JSON task packet only. Do not include chain-of-thought, secrets, full code, or a full diff.",
     "Required keys: goal, completion_definition, declared_scope, assumptions, evidence, prohibited_actions, steps, verification, acceptance_criteria, risk_tags, approval_points, major_deviation_rules.",
     "Every array must contain concise strings. Executor must re-read repository state before editing.",
@@ -22714,7 +22821,7 @@ function cleanArray(value) {
 // src/workflow/reviewer.ts
 function reviewerPrompt(task, packet, execution) {
   return [
-    "You are independent Sol reviewer for semantic-model-router.",
+    "You are independent semantic-model-router reviewer.",
     'Return JSON only: {status:"pass"|"repair"|"block",major_deviation:boolean,issues:string[],summary:string}.',
     "Use repair for fixable acceptance failures, block for unsafe or impossible work, and major_deviation when scope/public API/schema/permission/security behavior diverged.",
     `Original task:
@@ -22757,14 +22864,16 @@ function clean2(value) {
 
 // src/workflow/coordinator.ts
 var CLASSIFIER_TARGET = {
-  model: "gpt-5.6-luna",
+  model: "auto",
   effort: "low",
+  role: "classifier",
   sandbox: "read-only",
   approvalPolicy: "never"
 };
 var PLANNER_TARGET = {
-  model: "gpt-5.6-sol",
+  model: "auto",
   effort: "xhigh",
+  role: "planner",
   sandbox: "read-only",
   approvalPolicy: "never"
 };
@@ -22774,23 +22883,19 @@ async function runWorkflow(envelope, runner = createDefaultRunner(envelope), sig
     return awaitingApproval(envelope, hardRiskTags, options.dataDir);
   }
   let classifier;
+  let classifierTurn;
   if (envelope.override) {
     classifier = void 0;
   } else {
     try {
-      const classifierTurn = await runner.runTurn(
+      classifierTurn = await runner.runTurn(
         classifierPrompt(envelope.prompt),
-        CLASSIFIER_TARGET,
+        targetForRole(envelope, CLASSIFIER_TARGET),
         signal
       );
       classifier = parseClassifierResult(classifierTurn.text);
     } catch {
-      return {
-        route: "current",
-        status: "degraded-current",
-        receipt: "Route: degraded-current | Luna low unavailable | current model retained",
-        summary: "classifier unavailable; current model retained"
-      };
+      return degradedCurrent(envelope, "classifier unavailable");
     }
   }
   const policy = options.policy ?? (options.dataDir ? await getActivePolicy(options.dataDir) : BASELINE_POLICY);
@@ -22805,7 +22910,7 @@ async function runWorkflow(envelope, runner = createDefaultRunner(envelope), sig
   if (decision.requiresApproval && options.approved !== true) {
     return awaitingApproval(envelope, decision.riskTags, options.dataDir);
   }
-  return decision.route === "L" ? runLRoute(envelope, decision.reasonCodes, decision.summary, runner, signal) : runSRoute(envelope, decision.reasonCodes, decision.summary, runner, signal);
+  return decision.route === "L" ? runLRoute(envelope, decision.reasonCodes, decision.summary, runner, signal, classifierTurn) : runSRoute(envelope, decision.reasonCodes, decision.summary, runner, signal, classifierTurn);
 }
 async function resumeApprovedTask(dataDir, taskId, approvalToken, runner, signal) {
   const approved = await approvePendingTask(dataDir, taskId, approvalToken);
@@ -22829,103 +22934,152 @@ async function resumeApprovedTask(dataDir, taskId, approvalToken, runner, signal
   await completePendingTask(dataDir, taskId);
   return { ...workflow, taskId };
 }
-async function runLRoute(envelope, reasonCodes, reason, runner, signal) {
-  const target = executorTarget(envelope.permissionMode);
+async function runLRoute(envelope, reasonCodes, reason, runner, signal, classifierTurn) {
+  const target = executorTarget(envelope);
   try {
     const result = await runner.runTurn(executorPrompt(envelope.prompt), target, signal);
     return {
       route: "L",
       status: "succeeded",
-      receipt: `Route: L | Luna max | reason: ${formatReason(reasonCodes, reason, envelope.prompt)}`,
+      receipt: `Route: L | ${formatCalls([
+        ...classifierTurn ? [{ role: "classifier", result: classifierTurn }] : [],
+        { role: "executor", result }
+      ])} | reason: ${formatReason(reasonCodes, reason, envelope.prompt)}`,
       summary: summarize(result.text, envelope.prompt)
     };
   } catch {
-    return {
-      route: "current",
-      status: "degraded-current",
-      receipt: "Route: degraded-current | Luna max unavailable | current model retained",
-      summary: "executor unavailable; current model retained"
-    };
+    return degradedCurrent(envelope, "executor unavailable");
   }
 }
-async function runSRoute(envelope, reasonCodes, reason, runner, signal) {
+async function runSRoute(envelope, reasonCodes, reason, runner, signal, classifierTurn) {
   let solCalls = 0;
   let lunaCalls = 0;
   let packet;
+  let plannerTurn;
   try {
-    packet = await plan(envelope.prompt, runner, signal);
+    const planned = await plan(envelope, runner, signal);
+    packet = planned.packet;
+    plannerTurn = planned.result;
     solCalls += 1;
   } catch {
-    return blocked("Route: S | Sol xhigh planner unavailable | execution blocked", "planner unavailable");
+    return blocked(sReceipt(reasonCodes, reason, envelope.prompt, classifierTurn), "planner unavailable");
   }
   let executionReport = "";
   let lastReview;
+  let executionTurn;
+  let reviewTurn;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    if (lunaCalls >= 3) return blocked(sReceipt(reasonCodes, reason, envelope.prompt), "Luna repair limit reached");
+    if (lunaCalls >= 3) {
+      return blocked(
+        sReceipt(reasonCodes, reason, envelope.prompt, classifierTurn, plannerTurn, executionTurn, reviewTurn),
+        "executor repair limit reached"
+      );
+    }
     try {
       const execution = await runner.runTurn(
         executorPrompt(envelope.prompt, packet, lastReview),
-        executorTarget(envelope.permissionMode),
+        executorTarget(envelope),
         signal
       );
+      executionTurn = execution;
       lunaCalls += 1;
       executionReport = summarize(execution.text, envelope.prompt);
     } catch {
-      return {
-        route: "current",
-        status: "degraded-current",
-        receipt: "Route: degraded-current | Luna max unavailable | current model retained",
-        summary: "executor unavailable; current model retained"
-      };
+      return blocked(
+        sReceipt(reasonCodes, reason, envelope.prompt, classifierTurn, plannerTurn, executionTurn, reviewTurn),
+        "executor unavailable"
+      );
     }
-    if (solCalls >= 4) return blocked(sReceipt(reasonCodes, reason, envelope.prompt), "Sol review limit reached");
+    if (solCalls >= 4) {
+      return blocked(
+        sReceipt(reasonCodes, reason, envelope.prompt, classifierTurn, plannerTurn, executionTurn, reviewTurn),
+        "reviewer limit reached"
+      );
+    }
     try {
       const review = await runner.runTurn(
         reviewerPrompt(envelope.prompt, serializeTaskPacket(packet), executionReport),
-        { ...PLANNER_TARGET },
+        targetForRole(envelope, { ...PLANNER_TARGET, role: "reviewer" }),
         signal
       );
+      reviewTurn = review;
       solCalls += 1;
       lastReview = parseReviewResult(review.text);
     } catch {
-      return blocked("Route: S | Sol xhigh reviewer unavailable | execution blocked", "reviewer unavailable");
+      return blocked(
+        sReceipt(reasonCodes, reason, envelope.prompt, classifierTurn, plannerTurn, executionTurn, reviewTurn),
+        "reviewer unavailable"
+      );
     }
-    if (!lastReview) return blocked(sReceipt(reasonCodes, reason, envelope.prompt), "reviewer returned invalid result");
+    if (!lastReview) {
+      return blocked(
+        sReceipt(reasonCodes, reason, envelope.prompt, classifierTurn, plannerTurn, executionTurn, reviewTurn),
+        "reviewer returned invalid result"
+      );
+    }
     if (lastReview.status === "pass") {
       return {
         route: "S",
         status: "succeeded",
-        receipt: `Route: S | Sol xhigh -> Luna max -> Sol xhigh | reason: ${formatReason(reasonCodes, reason, envelope.prompt)}`,
+        receipt: `Route: S | ${formatCalls([
+          ...classifierTurn ? [{ role: "classifier", result: classifierTurn }] : [],
+          { role: "planner", result: plannerTurn },
+          { role: "executor", result: executionTurn },
+          { role: "reviewer", result: reviewTurn }
+        ])} | reason: ${formatReason(reasonCodes, reason, envelope.prompt)}`,
         summary: summarize(lastReview.summary, envelope.prompt)
       };
     }
-    if (lastReview.status === "block") return blocked(sReceipt(reasonCodes, reason, envelope.prompt), lastReview.summary);
+    if (lastReview.status === "block") {
+      return blocked(
+        sReceipt(reasonCodes, reason, envelope.prompt, classifierTurn, plannerTurn, executionTurn, reviewTurn),
+        lastReview.summary
+      );
+    }
     if (lastReview.majorDeviation) {
-      if (solCalls >= 4) return blocked(sReceipt(reasonCodes, reason, envelope.prompt), "major deviation exceeded Sol call limit");
-      try {
-        packet = await plan(
-          `${envelope.prompt}
-Reviewer found major deviation: ${lastReview.issues.join("; ")}`,
-          runner,
-          signal
+      if (solCalls >= 4) {
+        return blocked(
+          sReceipt(reasonCodes, reason, envelope.prompt, classifierTurn, plannerTurn, executionTurn, reviewTurn),
+          "major deviation exceeded reviewer call limit"
         );
+      }
+      try {
+        const replanned = await plan(
+          envelope,
+          runner,
+          signal,
+          `${envelope.prompt}
+Reviewer found major deviation: ${lastReview.issues.join("; ")}`
+        );
+        packet = replanned.packet;
+        plannerTurn = replanned.result;
         solCalls += 1;
       } catch {
-        return blocked(sReceipt(reasonCodes, reason, envelope.prompt), "replanning unavailable");
+        return blocked(
+          sReceipt(reasonCodes, reason, envelope.prompt, classifierTurn, plannerTurn, executionTurn, reviewTurn),
+          "replanning unavailable"
+        );
       }
     }
   }
-  return blocked(sReceipt(reasonCodes, reason, envelope.prompt), "repair limit reached");
+  return blocked(
+    sReceipt(reasonCodes, reason, envelope.prompt, classifierTurn, plannerTurn, executionTurn, reviewTurn),
+    "repair limit reached"
+  );
 }
-async function plan(prompt, runner, signal) {
-  const result = await runner.runTurn(plannerPrompt(prompt), PLANNER_TARGET, signal);
+async function plan(envelope, runner, signal, prompt = envelope.prompt) {
+  const result = await runner.runTurn(
+    plannerPrompt(prompt),
+    targetForRole(envelope, PLANNER_TARGET),
+    signal
+  );
   const packet = parseTaskPacket(result.text);
   if (!packet) throw new Error("Planner returned invalid task packet");
-  return packet;
+  return { packet, result };
 }
 function executorPrompt(prompt, packet, review) {
   const parts = [
-    "You are Luna executor for semantic-model-router.",
+    "You are semantic-model-router execution role.",
     "Re-read current repository state before editing. Follow existing permissions and scope.",
     "Do not perform delete, overwrite, publish, deployment, credential, schema, permission, or external side effects unless explicitly approved.",
     "Return a concise sanitized implementation and verification summary; no chain-of-thought or full diff.",
@@ -22938,14 +23092,28 @@ ${serializeTaskPacket(packet)}`);
 ${review.issues.join("; ")}`);
   return parts.join("\n");
 }
-function executorTarget(permissionMode) {
-  const permissions = permissionForMode(permissionMode);
+function executorTarget(envelope) {
+  const permissions = permissionForMode(envelope.permissionMode);
   return {
-    model: "gpt-5.6-luna",
+    model: forcedModelFamily(envelope),
     effort: "max",
+    role: "executor",
+    ...envelope.model ? { currentModel: envelope.model } : {},
     sandbox: permissions.sandbox,
     approvalPolicy: permissions.approvalPolicy
   };
+}
+function targetForRole(envelope, target) {
+  return {
+    ...target,
+    model: forcedModelFamily(envelope, target.model),
+    ...envelope.model ? { currentModel: envelope.model } : {}
+  };
+}
+function forcedModelFamily(envelope, fallback = "auto") {
+  if (envelope.override === "L") return "luna";
+  if (envelope.override === "S") return "sol";
+  return fallback;
 }
 function permissionForMode(mode) {
   switch (mode) {
@@ -22989,8 +23157,26 @@ async function awaitingApproval(envelope, riskTags, dataDir) {
 function blocked(receipt, summary) {
   return { route: "S", status: "blocked", receipt, summary: summarize(summary) };
 }
-function sReceipt(reasonCodes, reason, prompt) {
-  return `Route: S | Sol xhigh -> Luna max -> Sol xhigh | reason: ${formatReason(reasonCodes, reason, prompt)}`;
+function sReceipt(reasonCodes, reason, prompt, classifierTurn, plannerTurn, executionTurn, reviewTurn) {
+  const calls = [
+    ...classifierTurn ? [{ role: "classifier", result: classifierTurn }] : [],
+    ...plannerTurn ? [{ role: "planner", result: plannerTurn }] : [],
+    ...executionTurn ? [{ role: "executor", result: executionTurn }] : [],
+    ...reviewTurn ? [{ role: "reviewer", result: reviewTurn }] : []
+  ];
+  return `Route: S | ${calls.length ? formatCalls(calls) : "auto S workflow"} | reason: ${formatReason(reasonCodes, reason, prompt)}`;
+}
+function formatCalls(calls) {
+  return calls.map(({ role, result }) => `${role}=${result.model}/${result.effort}`).join(" -> ");
+}
+function degradedCurrent(envelope, reason) {
+  const current = envelope.model?.trim() ? redactText(envelope.model).replace(/[\r\n]+/g, " ").slice(0, 160) : "current model";
+  return {
+    route: "current",
+    status: "degraded-current",
+    receipt: `Route: degraded-current | ${reason} | current=${current}`,
+    summary: `${reason}; current model retained`
+  };
 }
 function formatReason(reasonCodes, summary, prompt) {
   let result = redactText([...reasonCodes, summary].join(" + "));
@@ -23410,7 +23596,7 @@ server.registerTool(
   "get_router_status",
   {
     title: "Get router status",
-    description: "Show local control-plane phase, fixed target roles, pending prompt count, and degraded state.",
+    description: "Show local control-plane phase, dynamically resolved model roles, pending prompt count, and degraded state.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -23428,9 +23614,11 @@ server.registerTool(
       const status = [
         `phase: ${CONTROL_PLANE_PHASE}`,
         "automatic_model_calls: bounded-lifecycle",
-        "router_target: gpt-5.6-luna low",
-        "planner_reviewer_target: gpt-5.6-sol xhigh",
-        "executor_target: gpt-5.6-luna max",
+        "model_selection: auto from model/list with role-fit scoring",
+        "classifier_target: role=classifier requested-effort=low",
+        "planner_reviewer_target: role=planner/reviewer requested-effort=xhigh minimum=high",
+        "executor_target: role=executor requested-effort=max",
+        "manual_overrides: @luna/@sol force model family; @current bypasses routing",
         `pending_prompt_refs: ${pending}`,
         `pending_approval_tasks: ${pendingTasks}`,
         `active_policy: ${activePolicy.spec.versionId}`,

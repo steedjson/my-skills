@@ -11,7 +11,7 @@ export interface ReviewResult {
 
 export function reviewerPrompt(task: string, packet: string, execution: string): string {
   return [
-    "You are independent Sol reviewer for semantic-model-router.",
+    "You are independent semantic-model-router reviewer.",
     "Return JSON only: {status:\"pass\"|\"repair\"|\"block\",major_deviation:boolean,issues:string[],summary:string}.",
     "Use repair for fixable acceptance failures, block for unsafe or impossible work, and major_deviation when scope/public API/schema/permission/security behavior diverged.",
     `Original task:\n${task}`,

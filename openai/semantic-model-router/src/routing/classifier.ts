@@ -25,7 +25,7 @@ export interface ClassifierResult {
 
 export function classifierPrompt(prompt: string): string {
   return [
-    "You are semantic-model-router classifier.",
+    "You are semantic-model-router classifier. Use the assigned model and reasoning effort only; do not assume a fixed provider or model family.",
     "Return JSON only. Never include chain-of-thought, secrets, code, or a full diff.",
     'Schema: {"route":"L"|"S","confidence":0..1,"risk_tags":[],"ambiguity":0..1,"scope":0..1,"cross_module":0..1,"unknown_context":0..1,"reason_codes":[string],"user_summary":string}.',
     "Use S when uncertain, cross-module, underspecified, or requiring architectural reasoning.",

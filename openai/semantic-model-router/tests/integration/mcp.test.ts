@@ -56,6 +56,7 @@ test("MCP initializes, reports status, and consumes prompt without echoing it", 
 
   const status = await client.callTool({ name: "get_router_status", arguments: {} });
   assert.match(JSON.stringify(status), /phase-6-maintenance/);
+  assert.match(JSON.stringify(status), /model_selection: auto from model\/list/);
 
   const rawPrompt = "private MCP prompt";
   const reference = await createPromptReference(root, {

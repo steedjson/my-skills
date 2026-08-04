@@ -26,7 +26,7 @@ export interface TaskPacket {
 
 export function plannerPrompt(prompt: string): string {
   return [
-    "You are Sol planner for semantic-model-router.",
+    "You are semantic-model-router planning role.",
     "Return one JSON task packet only. Do not include chain-of-thought, secrets, full code, or a full diff.",
     "Required keys: goal, completion_definition, declared_scope, assumptions, evidence, prohibited_actions, steps, verification, acceptance_criteria, risk_tags, approval_points, major_deviation_rules.",
     "Every array must contain concise strings. Executor must re-read repository state before editing.",

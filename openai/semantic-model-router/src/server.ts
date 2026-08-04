@@ -440,7 +440,7 @@ server.registerTool(
   {
     title: "Get router status",
     description:
-      "Show local control-plane phase, fixed target roles, pending prompt count, and degraded state.",
+      "Show local control-plane phase, dynamically resolved model roles, pending prompt count, and degraded state.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -458,9 +458,11 @@ server.registerTool(
       const status = [
         `phase: ${CONTROL_PLANE_PHASE}`,
         "automatic_model_calls: bounded-lifecycle",
-        "router_target: gpt-5.6-luna low",
-        "planner_reviewer_target: gpt-5.6-sol xhigh",
-        "executor_target: gpt-5.6-luna max",
+        "model_selection: auto from model/list with role-fit scoring",
+        "classifier_target: role=classifier requested-effort=low",
+        "planner_reviewer_target: role=planner/reviewer requested-effort=xhigh minimum=high",
+        "executor_target: role=executor requested-effort=max",
+        "manual_overrides: @luna/@sol force model family; @current bypasses routing",
         `pending_prompt_refs: ${pending}`,
         `pending_approval_tasks: ${pendingTasks}`,
         `active_policy: ${activePolicy.spec.versionId}`,

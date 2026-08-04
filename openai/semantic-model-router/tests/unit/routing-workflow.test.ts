@@ -71,9 +71,9 @@ class FakeRunner implements TurnRunner {
   async runTurn(prompt: string, target: RoleTarget): Promise<AppServerTurnResult> {
     this.calls.push({ prompt, target });
     let text = "implementation complete";
-    if (target.model === "gpt-5.6-luna" && target.effort === "low") text = this.classifierText;
-    else if (target.model === "gpt-5.6-sol" && prompt.includes("Sol planner")) text = packet();
-    else if (target.model === "gpt-5.6-sol") text = this.reviewerResults.shift() ?? review("pass");
+    if (target.role === "classifier") text = this.classifierText;
+    else if (target.role === "planner") text = packet();
+    else if (target.role === "reviewer") text = this.reviewerResults.shift() ?? review("pass");
     return {
       model: target.model,
       effort: target.effort,
@@ -97,15 +97,16 @@ test("classifier parser accepts fenced JSON and policy forces hard risk to appro
   assert.equal(decision.requiresApproval, true);
 });
 
-test("L route uses Luna low classifier then Luna max executor", async () => {
+test("L route uses auto classifier then auto executor", async () => {
   const runner = new FakeRunner();
   const result = await runWorkflow(envelope(), runner);
   assert.equal(result.route, "L");
   assert.equal(result.status, "succeeded");
   assert.deepEqual(
-    runner.calls.map(({ target }) => `${target.model}/${target.effort}`),
-    ["gpt-5.6-luna/low", "gpt-5.6-luna/max"],
+    runner.calls.map(({ target }) => `${target.role}/${target.model}/${target.effort}`),
+    ["classifier/auto/low", "executor/auto/max"],
   );
+  assert.match(result.receipt, /classifier=auto\/low -> executor=auto\/max/);
 });
 
 test("S route runs planner, executor, and independent reviewer", async () => {
@@ -116,14 +117,15 @@ test("S route runs planner, executor, and independent reviewer", async () => {
   assert.equal(result.route, "S");
   assert.equal(result.status, "succeeded");
   assert.deepEqual(
-    runner.calls.map(({ target }) => `${target.model}/${target.effort}`),
+    runner.calls.map(({ target }) => `${target.role}/${target.model}/${target.effort}`),
     [
-      "gpt-5.6-luna/low",
-      "gpt-5.6-sol/xhigh",
-      "gpt-5.6-luna/max",
-      "gpt-5.6-sol/xhigh",
+      "classifier/auto/low",
+      "planner/auto/xhigh",
+      "executor/auto/max",
+      "reviewer/auto/xhigh",
     ],
   );
+  assert.match(result.receipt, /planner=auto\/xhigh -> executor=auto\/max -> reviewer=auto\/xhigh/);
 });
 
 test("major deviation replans, while repair loop stays within call limits", async () => {
@@ -132,8 +134,8 @@ test("major deviation replans, while repair loop stays within call limits", asyn
   runner.reviewerResults = [review("repair", true), review("pass")];
   const result = await runWorkflow(envelope(), runner);
   assert.equal(result.status, "succeeded");
-  assert.equal(runner.calls.filter(({ target }) => target.model === "gpt-5.6-sol").length, 4);
-  assert.equal(runner.calls.filter(({ target }) => target.model === "gpt-5.6-luna" && target.effort === "max").length, 2);
+  assert.equal(runner.calls.filter(({ target }) => target.role === "planner" || target.role === "reviewer").length, 4);
+  assert.equal(runner.calls.filter(({ target }) => target.role === "executor").length, 2);
 });
 
 test("third repair request blocks instead of looping", async () => {
@@ -142,8 +144,21 @@ test("third repair request blocks instead of looping", async () => {
   runner.reviewerResults = [review("repair"), review("repair"), review("repair")];
   const result = await runWorkflow(envelope(), runner);
   assert.equal(result.status, "blocked");
-  assert.equal(runner.calls.filter(({ target }) => target.model === "gpt-5.6-luna" && target.effort === "max").length, 3);
-  assert.equal(runner.calls.filter(({ target }) => target.model === "gpt-5.6-sol").length, 4);
+  assert.equal(runner.calls.filter(({ target }) => target.role === "executor").length, 3);
+  assert.equal(runner.calls.filter(({ target }) => target.role === "planner" || target.role === "reviewer").length, 4);
+});
+
+test("@sol and @luna force model family while retaining route semantics", async () => {
+  const solRunner = new FakeRunner();
+  solRunner.classifierText = classifier("L");
+  const solResult = await runWorkflow(envelope({ override: "S" }), solRunner);
+  assert.equal(solResult.route, "S");
+  assert.ok(solRunner.calls.every(({ target }) => target.model === "sol"));
+
+  const lunaRunner = new FakeRunner();
+  const lunaResult = await runWorkflow(envelope({ override: "L" }), lunaRunner);
+  assert.equal(lunaResult.route, "L");
+  assert.ok(lunaRunner.calls.every(({ target }) => target.model === "luna"));
 });
 
 test("hard risk pauses before classifier and executor even with Luna override", async () => {

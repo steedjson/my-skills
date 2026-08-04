@@ -1,6 +1,8 @@
 # Semantic Model Router - Implementation Plan
 
-Status: Phase 6 implemented; delivery audit complete after final verification
+Status: Phase 6 implemented; source and isolated installed-cache verification
+complete. A real fresh Codex task E2E still requires explicit installation in
+the user's active `CODEX_HOME`.
 Target: `openai/semantic-model-router`
 Host baseline: Codex CLI 0.146.0 on 2026-08-04
 
@@ -10,10 +12,14 @@ Build a Codex plugin that applies global semantic model routing to every user pr
 
 Target roles:
 
-- Router: `gpt-5.6-luna` with `low` reasoning.
-- Planner: `gpt-5.6-sol` with `xhigh` reasoning and read-only access.
-- Executor: `gpt-5.6-luna` with `max` reasoning and inherited Codex permissions.
-- Reviewer: `gpt-5.6-sol` with `xhigh` reasoning and read-only access.
+- Classifier: `model: "auto"` with `low` reasoning.
+- Planner: `model: "auto"` with `xhigh` reasoning and read-only access.
+- Executor: `model: "auto"` with `max` reasoning and inherited Codex permissions.
+- Reviewer: `model: "auto"` with `xhigh` reasoning and read-only access.
+
+Each role discovers the live App Server catalog through `model/list` and picks
+the best available role-fit model deterministically. `@luna` and `@sol` are
+manual model-family overrides, not the default route.
 
 All automatic role calls use controlled Codex App Server threads. The current root
 thread remains the coordinator. It is not automatically reused because
@@ -25,22 +31,23 @@ thread remains the coordinator. It is not automatically reused because
 ```text
 UserPromptSubmit hook
   -> explicit override and hard-risk checks
-  -> Luna low semantic classifier
-     -> L: Luna max executor
-     -> S: Sol xhigh planner
+  -> auto low semantic classifier
+     -> L: auto max executor
+     -> S: auto xhigh planner
            -> high risk? create durable pending task and wait for user approval
-           -> Luna max executor
-           -> Sol xhigh reviewer
-           -> at most two Luna repair / Sol re-review cycles
+           -> auto max executor
+           -> auto xhigh reviewer
+           -> at most two auto repair / re-review cycles
   -> one-line route receipt
   -> sanitized local outcome record
 ```
 
 Fallbacks:
 
-- Luna classifier or executor unavailable: return a degraded route to the current
-  root model. Keep deterministic high-risk gates active.
-- Sol unavailable on an S route: fail closed before execution.
+- Classifier or L-route executor unavailable: return a degraded route to the
+  current root model. Keep deterministic high-risk gates active.
+- Any planner/reviewer (S path) unavailable: fail closed before execution or
+  repair continuation.
 - Unknown route or classifier uncertainty: use S.
 - No automatic provider fallback. Every App Server thread uses
   `allowProviderModelFallback: false`.
@@ -49,9 +56,9 @@ Fallbacks:
 
 The implementation must preserve these findings from the isolated spike:
 
-1. App Server `model/list` exposed:
-   - `gpt-5.6-sol`: `low`, `medium`, `high`, `xhigh`, `max`, `ultra`.
-   - `gpt-5.6-luna`: `low`, `medium`, `high`, `xhigh`, `max`.
+1. App Server `model/list` exposes the currently installed model catalog and
+   supported reasoning efforts. Model IDs and effort support are runtime data,
+   not hard-coded assumptions.
 2. Ephemeral, read-only CLI turns completed successfully with Luna max and Sol
    xhigh.
 3. A `UserPromptSubmit` command hook injected developer context successfully in

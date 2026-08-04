@@ -1,6 +1,6 @@
 {
   "name": "semantic-model-router",
-  "version": "0.1.0+codex.20260803180220",
+  "version": "0.1.0+codex.20260804013642",
   "description": "Local control plane for semantic model routing in Codex",
   "author": {
     "name": "steedjson"

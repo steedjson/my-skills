@@ -84,7 +84,7 @@ process.stdin.on("data", (chunk) => {
             reason_codes: ["fake-test"],
             user_summary: "single scoped task",
           });
-        } else if (inputText.includes("Sol planner")) {
+        } else if (inputText.includes("planning role")) {
           responseText = JSON.stringify({
             goal: "complete task",
             completion_definition: "verification passes",
@@ -99,7 +99,7 @@ process.stdin.on("data", (chunk) => {
             approval_points: [],
             major_deviation_rules: ["stop on scope expansion"],
           });
-        } else if (inputText.includes("independent Sol reviewer")) {
+        } else if (inputText.includes("independent semantic-model-router reviewer")) {
           responseText = JSON.stringify({
             status: "pass",
             major_deviation: false,

@@ -8,6 +8,7 @@ import test from "node:test";
 import {
   AppServerSupervisor,
   ModelPreflightError,
+  resolveRoleTarget,
   type RoleTarget,
 } from "../../src/app-server/supervisor.js";
 
@@ -56,6 +57,8 @@ test("preflights and applies exact Luna low, Luna max, and Sol xhigh settings", 
     const requests = (await readFile(log, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
     const modelList = requests.find((request) => request.method === "model/list");
     assert.deepEqual(modelList.params, { includeHidden: true });
+    const initialize = requests.find((request) => request.method === "initialize");
+    assert.equal(initialize.params.capabilities.experimentalApi, true);
     const threadStart = requests.find((request) => request.method === "thread/start");
     assert.equal(threadStart.params.model, target.model);
     assert.equal(threadStart.params.allowProviderModelFallback, false);
@@ -63,6 +66,87 @@ test("preflights and applies exact Luna low, Luna max, and Sol xhigh settings", 
     assert.equal(settings.params.model, target.model);
     assert.equal(settings.params.effort, target.effort);
   }
+});
+
+test("resolves installed model suffixes and downgrades unsupported max to highest available effort", () => {
+  const resolved = resolveRoleTarget(
+    [
+      {
+        id: "gpt-5.6-luna-csap-codexbuy-oai",
+        model: "gpt-5.6-luna-csap-codexbuy-oai",
+        supportedReasoningEfforts: [
+          { reasoningEffort: "low" },
+          { reasoningEffort: "xhigh" },
+        ],
+      },
+    ],
+    lunaMax,
+  );
+  assert.equal(resolved.model, "gpt-5.6-luna-csap-codexbuy-oai");
+  assert.equal(resolved.effort, "xhigh");
+  assert.equal(
+    resolved.selectionReason,
+    "requested=gpt-5.6-luna | role=executor | model=gpt-5.6-luna-csap-codexbuy-oai | requested-effort=max -> resolved-effort=xhigh",
+  );
+});
+
+test("auto selection prefers role-fit models and keeps deterministic tie-breaks", () => {
+  const models = [
+    {
+      id: "gpt-5.6-luna-csap-codexbuy-oai",
+      supportedReasoningEfforts: [
+        { reasoningEffort: "low" },
+        { reasoningEffort: "medium" },
+        { reasoningEffort: "high" },
+        { reasoningEffort: "xhigh" },
+        { reasoningEffort: "max" },
+      ],
+    },
+    {
+      id: "gpt-5.6-sol-csap-codexbuy-oai",
+      supportedReasoningEfforts: [{ reasoningEffort: "high" }, { reasoningEffort: "xhigh" }],
+    },
+    {
+      id: "gpt-5.6-terra-csap-codexbuy-oai",
+      supportedReasoningEfforts: [{ reasoningEffort: "low" }, { reasoningEffort: "high" }],
+    },
+  ];
+  assert.equal(
+    resolveRoleTarget(models, {
+      model: "auto",
+      role: "classifier",
+      effort: "low",
+      sandbox: "read-only",
+    }).model,
+    "gpt-5.6-luna-csap-codexbuy-oai",
+  );
+  assert.equal(
+    resolveRoleTarget(models, {
+      model: "auto",
+      role: "planner",
+      effort: "xhigh",
+      sandbox: "read-only",
+    }).model,
+    "gpt-5.6-sol-csap-codexbuy-oai",
+  );
+  assert.equal(
+    resolveRoleTarget(models, {
+      model: "auto",
+      role: "executor",
+      effort: "max",
+      sandbox: "read-only",
+    }).model,
+    "gpt-5.6-luna-csap-codexbuy-oai",
+  );
+  assert.equal(
+    resolveRoleTarget(models, {
+      model: "auto",
+      role: "reviewer",
+      effort: "xhigh",
+      sandbox: "read-only",
+    }).model,
+    "gpt-5.6-sol-csap-codexbuy-oai",
+  );
 });
 
 test("unknown model fails closed before thread creation", async (t) => {
