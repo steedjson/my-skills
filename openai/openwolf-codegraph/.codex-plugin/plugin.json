@@ -1,0 +1,22 @@
+{
+  "name": "openwolf-codegraph",
+  "version": "0.1.0+codex.20260804092304",
+  "description": "Automatically bridges Codex sessions to repository-local OpenWolf hooks and CodeGraph guidance.",
+  "author": {
+    "name": "Local developer"
+  },
+  "interface": {
+    "displayName": "OpenWolf + CodeGraph",
+    "shortDescription": "Automatic project hooks and code navigation guidance.",
+    "longDescription": "Detects OpenWolf and CodeGraph in the active repository, forwards Codex lifecycle events to local OpenWolf hooks, and injects CodeGraph-first navigation guidance.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Check OpenWolf and CodeGraph integration for this repository."
+    ]
+  }
+}

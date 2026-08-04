@@ -20,6 +20,10 @@
 
 按任务语义协调 Codex 模型角色。当前只实现安全控制面，不调用模型。
 
+### [openwolf-codegraph](./openai/openwolf-codegraph/)
+
+在用户级统一接入 Codex 生命周期事件。仅当仓库存在 `.wolf/` 或 `.codegraph/` 时启用：转发 OpenWolf 本地 hook，并注入 CodeGraph 优先导航规则。
+
 ---
 
 ## 安装
@@ -41,11 +45,20 @@ npm run verify:runtime
 python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .
 ```
 
+`openwolf-codegraph` 无构建步骤：
+
+```bash
+cd openai/openwolf-codegraph
+node --check hooks/openwolf.mjs
+python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .
+```
+
 首次本地安装：
 
 ```bash
 codex plugin marketplace add openai
 codex plugin add semantic-model-router@my-skills-local
+codex plugin add openwolf-codegraph@my-skills-local
 ```
 
 安装或更新后，重新信任 hook，并在新 Codex 任务中测试。
@@ -60,6 +73,9 @@ my-skills/
 │   └── SKILL.md
 ├── openai/
 │   ├── .agents/plugins/marketplace.json
+│   ├── openwolf-codegraph/
+│   │   ├── .codex-plugin/plugin.json
+│   │   └── hooks/
 │   └── semantic-model-router/
 │       ├── .codex-plugin/plugin.json
 │       ├── hooks/

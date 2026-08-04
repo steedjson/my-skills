@@ -1,0 +1,54 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/openwolf.mjs\" session-start",
+            "timeout": 20,
+            "statusMessage": "Loading project automation"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/openwolf.mjs\" pre-write",
+            "timeout": 20,
+            "statusMessage": "Checking OpenWolf guidance"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/openwolf.mjs\" post-write",
+            "timeout": 25,
+            "statusMessage": "Updating OpenWolf memory"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/openwolf.mjs\" stop",
+            "timeout": 25,
+            "statusMessage": "Saving OpenWolf session summary"
+          }
+        ]
+      }
+    ]
+  }
+}
