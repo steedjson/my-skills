@@ -12,6 +12,13 @@
       ]
     },
     {
+      "name": "delegate-execution-agent",
+      "description": "Lightweight main-agent and execution-agent delegation with live model discovery",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "django-api-change",
       "description": "Implement, debug, or review Django API and Service changes in the wework project",
       "project": "wework",
