@@ -12,6 +12,10 @@
 
 建立轻量主 Agent 与执行 Agent 分工。保持主模型不变，优先选择当前可用的 GPT-5.6 Luna Max，其次选择 DeepSeek Flash 的最高实际可用 effort；首选均不可用时，从实时 Agent 列表提供候选。
 
+### [cc-switch-reasoning-tier-repair](./cc-switch-reasoning-tier-repair/)
+
+读取实时 Codex 与 cc-switch 配置，检查并修复已核实模型的 `low`、`medium`、`high`、`xhigh`、`max`、`ultra` reasoning 档位。支持检查、预览、备份和写入后 TOML/JSON 验证；未知模型保留原值并报告。
+
 ### [django-api-change](./django-api-change/) *(project: wework)*
 
 在 wework 项目中实现、调试或审查 Django API 与 Service 变更。涵盖路由、视图、参数 Schema、Service、模型、迁移、权限、租户隔离、事务、软删除、导出和 API 测试场景。遵循 View → Form/Schema → Service → Model 分层约定。
@@ -40,6 +44,9 @@ cp codexradar-model-advisor/SKILL.md ~/.claude/skills/codexradar-model-advisor/S
 
 mkdir -p ~/.claude/skills/delegate-execution-agent
 cp delegate-execution-agent/SKILL.md ~/.claude/skills/delegate-execution-agent/SKILL.md
+
+mkdir -p ~/.claude/skills/cc-switch-reasoning-tier-repair
+cp -R cc-switch-reasoning-tier-repair/. ~/.claude/skills/cc-switch-reasoning-tier-repair/
 ```
 
 Codex 插件从各插件目录构建与验证。`semantic-model-router` 当前验证命令：
@@ -80,6 +87,11 @@ my-skills/
 │   └── SKILL.md
 ├── delegate-execution-agent/
 │   └── SKILL.md
+├── cc-switch-reasoning-tier-repair/
+│   ├── SKILL.md
+│   ├── agents/openai.yaml
+│   ├── references/expected-tier-map.json
+│   └── scripts/repair.py
 ├── openai/
 │   ├── .agents/plugins/marketplace.json
 │   ├── openwolf-codegraph/

@@ -19,6 +19,16 @@
       ]
     },
     {
+      "name": "cc-switch-reasoning-tier-repair",
+      "description": "检查并修复 Codex 与 cc-switch 模型 reasoning 档位配置",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml",
+        "scripts/repair.py",
+        "references/expected-tier-map.json"
+      ]
+    },
+    {
       "name": "django-api-change",
       "description": "Implement, debug, or review Django API and Service changes in the wework project",
       "project": "wework",
