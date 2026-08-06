@@ -14,7 +14,7 @@
 
 ### [ccswitchmulti-reasoning-tier-repair](./ccswitchmulti-reasoning-tier-repair/)
 
-读取实时 CCSwitchMulti 与 Codex 配置，检查并修复已核实模型的 `low`、`medium`、`high`、`xhigh`、`max`、`ultra` reasoning 档位。支持检查、预览、备份和写入后 TOML/JSON/数据库验证；未知模型保留原值并报告。
+读取实时 CCSwitchMulti 与 Codex 配置，检查并修复已核实模型的 `low`、`medium`、`high`、`xhigh`、`max`、`ultra` reasoning 档位，并检测已安装 CCSwitchMulti 运行时是否真的支持目标档位。支持检查、预览、备份和写入后 TOML/JSON/数据库验证；未知模型保留原值并报告。
 
 ### [django-api-change](./django-api-change/) *(project: wework)*
 

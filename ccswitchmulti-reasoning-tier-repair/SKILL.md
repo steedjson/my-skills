@@ -40,16 +40,46 @@ description: 检查并修复 CCSwitchMulti 与 Codex 的模型 reasoning 档位�
 
 4. 使用 `--effort max` 同时修复顶层 `model_reasoning_effort`。使用 `--config`
    指定配置文件，使用 `--db` 指定 CCSwitchMulti 数据库，使用 `--backup-dir`
-   指定备份目录；需要其他已核实模型映射时，用 `--tier-map` 指定 JSON 映射文件。
+   指定备份目录；使用 `--ccswitch-app` 指定应用 bundle；需要其他已核实模型映射时，
+   用 `--tier-map` 指定 JSON 映射文件。
 
 5. 报告实际修改的模型、备份路径、未解析模型和验证结果。不要输出 API key、userToken 或完整 provider 配置。
 
 ## 重要限制
 
 - catalog 中声明的档位只代表客户端可选项，不等于路由后端一定接受。修复后仍需用一次真实请求或新 Codex 任务验证目标档位。
+- 本 Skill 不把 `max` 映射成 `xhigh`。`--effort max` 会把字面值 `max` 写入
+  `config.toml`、provider 配置、`common_config_codex` 和 `proxy_live_backup`；
+  DeepSeek 的 `supported_reasoning_levels` 也保留 `max`。如果配置中是 `max`，
+  但真实出站请求变成 `xhigh`，问题在 CCSwitchMulti 的请求转换链路或上游，
+  不应继续修改模型目录来“修复”它。
+- 检查默认会读取 `/Applications/CCSwitchMulti.app` 的 bundle 版本和二进制内嵌
+  reasoning 选择器。若输出 `runtime blocker`，表示当前应用本身只声明
+  `low/medium/high/xhigh`，没有 `max` 处理分支；这类问题不能靠继续写
+  `config.toml`、catalog 或数据库解决。应升级/修复 CCSwitchMulti，或取得脱敏
+  outbound body 证明转换层已支持 `max`。仅需检查文件时可使用
+  `--skip-runtime-check`，但不能据此声称真实请求使用了 `max`。
 - `OK` 只表示配置文件、当前 catalog 和运行时缓存一致；不表示真实出站请求已经
   使用该档位。
-- 重启或重新安装后如果配置再次被覆盖，重新运行本 Skill；不要把一次成功修复当作永久持久化。
+- 修改数据库前先退出 CCSwitchMulti，并保存脚本打印的数据库备份路径。修复后按下面
+  流程验证是否会被重启恢复、是否形成反复修复：
+
+  ```bash
+  python3 /path/to/repair.py --check --effort max
+  python3 /path/to/repair.py --dry-run --effort max
+  python3 /path/to/repair.py --effort max
+  # 启动 CCSwitchMulti，等待配置加载完成
+  python3 /path/to/repair.py --check --effort max
+  # 再完整退出并启动一次
+  python3 /path/to/repair.py --check --effort max
+  ```
+
+  两次重启后的 `--check` 都应无 drift；连续再次执行修复也应不产生新备份或新
+  修改。若重启后又出现 drift，记录被恢复的具体表/字段，优先追查 CCSwitchMulti
+  的配置生成源，不要盲目重复写库。
+- 判断“实际使用的是哪个档位”必须查看脱敏请求体或转换日志。配置/catalog 只能证明
+  客户端选择值；原生 Responses 路径和 Responses→Chat Completions 转换路径必须分别
+  验证 `reasoning.effort` 是否仍为 `max`。
 - 不要删除未知档位、未知模型或用户的其他配置。发现 JSON/TOML 无法解析时停止并先报告，不要覆盖损坏文件。
 - 数据库修复只改已存在的 `model_reasoning_effort`，不会给缺失该字段的 provider
   凭空新增；未知 JSON 结构保持原样并报告。

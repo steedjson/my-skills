@@ -29,6 +29,10 @@
     "grok-4.5": ["low", "medium", "high", "xhigh", "max", "ultra"],
     "glm-5.2-csap-tokenplan": ["low", "medium", "high", "xhigh", "max"]
   },
+  "aliases": {
+    "deepseek-v4-flash-0731": "deepseek-v4-flash-0731-csap-tokenplan",
+    "deepseek-v4-pro": "deepseek-v4-pro-csap-tokenplan"
+  },
   "descriptions": {
     "low": "Fast responses with lighter reasoning",
     "medium": "Balances speed and reasoning depth for everyday tasks",

@@ -3,6 +3,8 @@
     "bundle_id": "com.ccswitchmulti.desktop",
     "version": "3.19.1-9",
     "checked_at": "2026-08-06",
-    "notes": "Native Codex Responses passthrough preserves reasoning.effort. Anthropic/OpenRouter response transforms clamp max to xhigh."
+    "runtime_reasoning_efforts": ["low", "medium", "high", "xhigh"],
+    "max_runtime_support": false,
+    "notes": "The bundled reasoningEfforts picker in this build has no max branch. Native Codex Responses passthrough and Responses-to-Chat conversion remain separate paths; verify a redacted outbound request after any runtime update."
   }
 }

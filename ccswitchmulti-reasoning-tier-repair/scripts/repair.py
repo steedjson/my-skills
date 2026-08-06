@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import plistlib
 import re
 import shutil
 import sqlite3
@@ -30,11 +31,78 @@ MODELS_ASSIGNMENT = re.compile(r"\bmodels\s*=\s*\[")
 TOP_LEVEL_EFFORT = re.compile(
     r'(?m)^model_reasoning_effort\s*=\s*"([^"]+)"\s*$'
 )
+MODEL_ASSIGNMENT = re.compile(r'(?m)^model\s*=\s*"([^"]+)"\s*$')
 EFFORT_ASSIGNMENT = re.compile(r'model_reasoning_effort\s*=\s*"([^"]+)"')
+RUNTIME_REASONING_EFFORTS = re.compile(
+    r'reasoningEfforts\s*=\s*\(\)\s*=>\s*\[\s*'
+    r'(?P<values>"[^"]+"(?:\s*,\s*"[^"]+")*)\s*\]'
+)
+DEFAULT_CCSWITCH_APP = Path("/Applications/CCSwitchMulti.app")
 
 
 def load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def ccswitch_runtime_diagnostics(
+    app_path: Path = DEFAULT_CCSWITCH_APP,
+) -> dict[str, Any]:
+    """Inspect bundled picker support without launching or modifying CCSwitchMulti."""
+    app_path = app_path.expanduser()
+    binary_path = app_path / "Contents" / "MacOS" / "cc-switch"
+    info_path = app_path / "Contents" / "Info.plist"
+    diagnostics: dict[str, Any] = {
+        "app_path": str(app_path),
+        "binary_path": str(binary_path),
+        "version": None,
+        "picker_efforts": None,
+        "supports_max": None,
+        "evidence": None,
+    }
+    if info_path.exists():
+        try:
+            with info_path.open("rb") as handle:
+                info = plistlib.load(handle)
+            version = info.get("CFBundleShortVersionString") or info.get("CFBundleVersion")
+            if isinstance(version, str):
+                diagnostics["version"] = version
+        except (OSError, plistlib.InvalidFileException, ValueError):
+            pass
+    if not binary_path.is_file():
+        return diagnostics
+    try:
+        binary_text = binary_path.read_bytes().decode("utf-8", errors="ignore")
+    except OSError:
+        return diagnostics
+    match = RUNTIME_REASONING_EFFORTS.search(binary_text)
+    if match is None:
+        return diagnostics
+    values = re.findall(r'"([^"]+)"', match.group("values"))
+    diagnostics["picker_efforts"] = values
+    diagnostics["supports_max"] = "max" in values
+    diagnostics["evidence"] = "embedded reasoningEfforts picker"
+    return diagnostics
+
+
+def runtime_effort_warning(
+    diagnostics: dict[str, Any],
+    requested_effort: str | None,
+) -> str | None:
+    """Explain when the installed runtime cannot preserve the requested effort."""
+    if requested_effort != "max":
+        return None
+    picker_efforts = diagnostics.get("picker_efforts")
+    if not isinstance(picker_efforts, list) or diagnostics.get("supports_max") is not False:
+        return None
+    version = diagnostics.get("version")
+    version_label = f" {version}" if isinstance(version, str) else ""
+    efforts = ", ".join(str(value) for value in picker_efforts)
+    return (
+        f"CCSwitchMulti{version_label} runtime picker only embeds [{efforts}]; "
+        "it has no max handler. Config/catalog may stay at max, but this build can "
+        "normalize the selected effort to xhigh before outbound conversion. "
+        "This is a runtime compatibility blocker, not a catalog drift; do not map max to xhigh."
+    )
 
 
 def toml_scalar(value: Any) -> str:
@@ -64,9 +132,49 @@ def serialize_models(models: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def model_identifiers(model: dict[str, Any]) -> list[str]:
+    identifiers: list[str] = []
+    for field in ("model", "id", "slug", "upstreamModel", "upstream_model"):
+        value = model.get(field)
+        if isinstance(value, str) and value and value not in identifiers:
+            identifiers.append(value)
+    return identifiers
+
+
 def model_id(model: dict[str, Any]) -> str | None:
-    value = model.get("model") or model.get("id") or model.get("slug")
-    return value if isinstance(value, str) and value else None
+    identifiers = model_identifiers(model)
+    return identifiers[0] if identifiers else None
+
+
+def resolve_model_key(
+    value: str | None,
+    expected_map: dict[str, list[str]],
+    aliases: dict[str, str] | None = None,
+) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    if value in expected_map:
+        return value
+    aliases = aliases or {}
+    canonical = aliases.get(value)
+    return canonical if canonical in expected_map else None
+
+
+def known_model_key(
+    model: dict[str, Any],
+    expected_map: dict[str, list[str]],
+    aliases: dict[str, str] | None = None,
+) -> str | None:
+    for identifier in model_identifiers(model):
+        resolved = resolve_model_key(identifier, expected_map, aliases)
+        if resolved is not None:
+            return resolved
+    return None
+
+
+def extract_configured_model(text: str) -> str | None:
+    match = MODEL_ASSIGNMENT.search(text)
+    return match.group(1) if match else None
 
 
 def tier_values(entries: Any, key: str) -> list[str]:
@@ -79,6 +187,7 @@ def apply_tiers(
     model: dict[str, Any],
     expected: list[str],
     descriptions: dict[str, str],
+    default_effort: str | None = None,
 ) -> bool:
     changed = False
     for field, key in (
@@ -103,6 +212,17 @@ def apply_tiers(
         ]
         if tier_values(entries, key) != tier_values(rebuilt, key):
             model[field] = rebuilt
+            changed = True
+    if default_effort is not None:
+        for field in (
+            "default_reasoning_effort",
+            "default_reasoning_level",
+            "defaultReasoningEffort",
+            "defaultReasoningLevel",
+        ):
+            if field not in model or model[field] == default_effort:
+                continue
+            model[field] = default_effort
             changed = True
     return changed
 
@@ -164,6 +284,7 @@ def find_provider_models(config_text: str, provider_key: str) -> tuple[str, str,
 def provider_keys_with_known_models(
     config_data: dict[str, Any],
     expected_map: dict[str, list[str]],
+    aliases: dict[str, str] | None = None,
 ) -> list[str]:
     matches: list[str] = []
     providers = config_data.get("model_providers", {})
@@ -176,7 +297,7 @@ def provider_keys_with_known_models(
         if not isinstance(models, list):
             continue
         if any(
-            isinstance(model, dict) and model_id(model) in expected_map
+            isinstance(model, dict) and known_model_key(model, expected_map, aliases) is not None
             for model in models
         ):
             matches.append(provider_key)
@@ -219,9 +340,10 @@ def repair_config(
     expected_map: dict[str, list[str]],
     descriptions: dict[str, str],
     effort: str | None = None,
+    aliases: dict[str, str] | None = None,
 ) -> tuple[str, list[str], list[str]]:
     config_data = tomllib.loads(config_text)
-    provider_keys = provider_keys_with_known_models(config_data, expected_map)
+    provider_keys = provider_keys_with_known_models(config_data, expected_map, aliases)
     if not provider_keys:
         raise RuntimeError("no provider with known inline models found")
 
@@ -238,14 +360,38 @@ def repair_config(
 
         for model in models:
             current_id = model_id(model)
-            expected = expected_map.get(current_id) if current_id else None
+            canonical_id = known_model_key(model, expected_map, aliases)
+            expected = expected_map.get(canonical_id) if canonical_id else None
             if expected is None:
                 if current_id:
                     unresolved.append(current_id)
                 continue
             before = tier_values(model.get("supported_reasoning_levels"), "effort")
-            if apply_tiers(model, expected, descriptions):
-                changes.append(f"{provider_key}/{current_id}: {before} -> {expected}")
+            before_defaults = {
+                field: model.get(field)
+                for field in (
+                    "default_reasoning_effort",
+                    "default_reasoning_level",
+                    "defaultReasoningEffort",
+                    "defaultReasoningLevel",
+                )
+                if field in model
+            }
+            if apply_tiers(model, expected, descriptions, effort):
+                after = tier_values(model.get("supported_reasoning_levels"), "effort")
+                detail: list[str] = []
+                if before != after:
+                    detail.append(f"tiers {before} -> {after}")
+                default_changes = [
+                    f"{field} {before_defaults[field]} -> {model[field]}"
+                    for field in before_defaults
+                    if before_defaults[field] != model.get(field)
+                ]
+                if default_changes:
+                    detail.append("defaults " + ", ".join(default_changes))
+                changes.append(
+                    f"{provider_key}/{current_id}: " + "; ".join(detail)
+                )
 
         repaired_text = prefix + serialize_models(models) + suffix
 
@@ -259,6 +405,8 @@ def repair_catalog(
     catalog: dict[str, Any],
     expected_map: dict[str, list[str]],
     descriptions: dict[str, str],
+    effort: str | None = None,
+    aliases: dict[str, str] | None = None,
 ) -> tuple[list[str], list[str]]:
     models = catalog.get("models") if isinstance(catalog, dict) else catalog
     if not isinstance(models, list):
@@ -267,14 +415,36 @@ def repair_catalog(
     unresolved: list[str] = []
     for model in models:
         current_id = model_id(model)
-        expected = expected_map.get(current_id) if current_id else None
+        canonical_id = known_model_key(model, expected_map, aliases)
+        expected = expected_map.get(canonical_id) if canonical_id else None
         if expected is None:
             if current_id:
                 unresolved.append(current_id)
             continue
         before = tier_values(model.get("supported_reasoning_levels"), "effort")
-        if apply_tiers(model, expected, descriptions):
-            changes.append(f"{current_id}: {before} -> {expected}")
+        before_defaults = {
+            field: model.get(field)
+            for field in (
+                "default_reasoning_effort",
+                "default_reasoning_level",
+                "defaultReasoningEffort",
+                "defaultReasoningLevel",
+            )
+            if field in model
+        }
+        if apply_tiers(model, expected, descriptions, effort):
+            after = tier_values(model.get("supported_reasoning_levels"), "effort")
+            detail: list[str] = []
+            if before != after:
+                detail.append(f"tiers {before} -> {after}")
+            default_changes = [
+                f"{field} {before_defaults[field]} -> {model[field]}"
+                for field in before_defaults
+                if before_defaults[field] != model.get(field)
+            ]
+            if default_changes:
+                detail.append("defaults " + ", ".join(default_changes))
+            changes.append(f"{current_id}: " + "; ".join(detail))
     return changes, unresolved
 
 
@@ -302,7 +472,10 @@ def json_config_effort(text: str) -> str | None:
     return extract_configured_effort(config)
 
 
-def replace_json_config_effort(text: str, effort: str) -> tuple[str, int]:
+def replace_json_config_effort(
+    text: str,
+    effort: str,
+) -> tuple[str, int]:
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
@@ -317,7 +490,10 @@ def replace_json_config_effort(text: str, effort: str) -> tuple[str, int]:
     return json.dumps(data, ensure_ascii=False), count
 
 
-def database_drift(db_path: Path, effort: str) -> list[str]:
+def database_drift(
+    db_path: Path,
+    effort: str,
+) -> list[str]:
     """Return cc-switch database rows whose configured effort differs."""
     if not db_path.exists():
         return []
@@ -439,6 +615,16 @@ def main() -> int:
         default=str(Path.home() / ".cc-switch" / "cc-switch.db"),
         help="cc-switch database to check and repair",
     )
+    parser.add_argument(
+        "--ccswitch-app",
+        default=str(DEFAULT_CCSWITCH_APP),
+        help="CCSwitchMulti.app bundle used for read-only runtime compatibility checks",
+    )
+    parser.add_argument(
+        "--skip-runtime-check",
+        action="store_true",
+        help="skip the read-only CCSwitchMulti binary compatibility check",
+    )
     parser.add_argument("--check", action="store_true", help="report drift and exit without writing")
     parser.add_argument("--dry-run", action="store_true", help="show what would change without writing")
     args = parser.parse_args()
@@ -447,9 +633,19 @@ def main() -> int:
     tier_map = load_json(tier_map_path)
     expected_map: dict[str, list[str]] = tier_map["models"]
     descriptions: dict[str, str] = tier_map["descriptions"]
+    aliases: dict[str, str] = tier_map.get("aliases", {})
     if args.effort is not None and args.effort not in descriptions:
         print(f"unknown reasoning effort: {args.effort}")
         return 2
+
+    runtime_warning: str | None = None
+    if not args.skip_runtime_check:
+        runtime_warning = runtime_effort_warning(
+            ccswitch_runtime_diagnostics(Path(args.ccswitch_app).expanduser()),
+            args.effort,
+        )
+        if runtime_warning:
+            print(f"runtime blocker: {runtime_warning}")
 
     db_path = Path(args.db).expanduser()
     db_changes: list[str] = []
@@ -493,7 +689,11 @@ def main() -> int:
     new_config_text: str | None = None
     try:
         new_config_text, config_changes, unresolved = repair_config(
-            config_text, expected_map, descriptions, args.effort
+            config_text,
+            expected_map,
+            descriptions,
+            args.effort,
+            aliases,
         )
         unresolved_models.update(unresolved)
     except RuntimeError as exc:
@@ -502,7 +702,13 @@ def main() -> int:
     for catalog_path in catalog_paths:
         try:
             catalog = load_json(catalog_path)
-            changes, unresolved = repair_catalog(catalog, expected_map, descriptions)
+            changes, unresolved = repair_catalog(
+                catalog,
+                expected_map,
+                descriptions,
+                args.effort,
+                aliases,
+            )
             catalog_changes[catalog_path] = changes
             catalog_data[catalog_path] = catalog
             unresolved_models.update(unresolved)
@@ -517,9 +723,15 @@ def main() -> int:
 
     has_catalog_changes = any(catalog_changes.values())
     if not config_changes and not has_catalog_changes and not db_changes and catalog_paths:
+        if runtime_warning:
+            print("CONFIG OK: stored effort and tiers match, but runtime cannot preserve max")
+            return 1
         print("OK: active effort and all checked tiers match the expected map")
         return 0
     if not config_changes and not has_catalog_changes and not db_changes:
+        if runtime_warning:
+            print("CONFIG OK: stored effort and tiers match, but runtime cannot preserve max")
+            return 1
         print("OK: config.toml effort and tiers match; no catalog checked")
         return 0
 
@@ -535,14 +747,18 @@ def main() -> int:
     if args.check or args.dry_run:
         action = "check" if args.check else "dry-run"
         print(f"[{action}] no files modified")
-        return 0 if args.check else 1
+        return 1 if args.dry_run or runtime_warning else 0
 
     backup_dir = Path(args.backup_dir).expanduser()
     config_backup = backup(config_path, backup_dir)
     print(f"backup: {config_backup}")
     db_backup: Path | None = None
     if db_changes:
-        db_backup = repair_database(db_path, args.effort, backup_dir)[1]
+        db_backup = repair_database(
+            db_path,
+            args.effort,
+            backup_dir,
+        )[1]
         print(f"backup: {db_backup}")
 
     for catalog_path, changes in catalog_changes.items():
@@ -570,6 +786,9 @@ def main() -> int:
         print("validation failed: cc-switch database still has drift")
         return 1
     print("validation: config.toml, checked catalogs, and cc-switch database parse OK")
+    if runtime_warning:
+        print("validation: stored max is intact; runtime blocker remains")
+        return 1
     print("restart Codex (or start a new session) for the change to take effect")
     return 0
 
