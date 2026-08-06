@@ -18,6 +18,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import sys
 import tomllib
 from datetime import datetime
@@ -29,6 +30,7 @@ MODELS_ASSIGNMENT = re.compile(r"\bmodels\s*=\s*\[")
 TOP_LEVEL_EFFORT = re.compile(
     r'(?m)^model_reasoning_effort\s*=\s*"([^"]+)"\s*$'
 )
+EFFORT_ASSIGNMENT = re.compile(r'model_reasoning_effort\s*=\s*"([^"]+)"')
 
 
 def load_json(path: Path) -> Any:
@@ -276,6 +278,143 @@ def repair_catalog(
     return changes, unresolved
 
 
+def extract_configured_effort(text: str) -> str | None:
+    match = EFFORT_ASSIGNMENT.search(text)
+    return match.group(1) if match else None
+
+
+def replace_configured_effort(text: str, effort: str) -> tuple[str, int]:
+    updated, count = EFFORT_ASSIGNMENT.subn(
+        f'model_reasoning_effort = "{effort}"', text
+    )
+    return updated, count
+
+
+def json_config_effort(text: str) -> str | None:
+    """Read model_reasoning_effort from a JSON object's config string."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    config = data.get("config") if isinstance(data, dict) else None
+    if not isinstance(config, str):
+        return None
+    return extract_configured_effort(config)
+
+
+def replace_json_config_effort(text: str, effort: str) -> tuple[str, int]:
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return text, 0
+    config = data.get("config") if isinstance(data, dict) else None
+    if not isinstance(config, str):
+        return text, 0
+    updated, count = replace_configured_effort(config, effort)
+    if count == 0:
+        return text, 0
+    data["config"] = updated
+    return json.dumps(data, ensure_ascii=False), count
+
+
+def database_drift(db_path: Path, effort: str) -> list[str]:
+    """Return cc-switch database rows whose configured effort differs."""
+    if not db_path.exists():
+        return []
+    changes: list[str] = []
+    conn = sqlite3.connect(f"file:{db_path.resolve().as_posix()}?mode=ro", uri=True)
+    try:
+        for provider_id, name, settings_config in conn.execute(
+            "SELECT id, name, settings_config FROM providers WHERE app_type='codex'"
+        ):
+            current = json_config_effort(settings_config)
+            if current is not None and current != effort:
+                changes.append(
+                    f"provider {name} ({provider_id}): model_reasoning_effort {current} -> {effort}"
+                )
+        for key, value in conn.execute(
+            "SELECT key, value FROM settings WHERE value LIKE '%model_reasoning_effort%'"
+        ):
+            current = extract_configured_effort(value)
+            if current is not None and current != effort:
+                changes.append(
+                    f"settings {key}: model_reasoning_effort {current} -> {effort}"
+                )
+        for app_type, original_config in conn.execute(
+            "SELECT app_type, original_config FROM proxy_live_backup "
+            "WHERE original_config LIKE '%model_reasoning_effort%'"
+        ):
+            current = json_config_effort(original_config)
+            if current is not None and current != effort:
+                changes.append(
+                    f"live backup {app_type}: model_reasoning_effort {current} -> {effort}"
+                )
+    finally:
+        conn.close()
+    return changes
+
+
+def backup_database(db_path: Path, backup_dir: Path) -> Path:
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    target = backup_dir / f"{db_path.name}.before-reasoning-tier-repair-{stamp}"
+    source = sqlite3.connect(db_path)
+    destination = sqlite3.connect(target)
+    try:
+        source.backup(destination)
+    finally:
+        destination.close()
+        source.close()
+    return target
+
+
+def repair_database(
+    db_path: Path,
+    effort: str,
+    backup_dir: Path,
+) -> tuple[list[str], Path | None]:
+    changes = database_drift(db_path, effort)
+    if not changes:
+        return [], None
+
+    backup_path = backup_database(db_path, backup_dir)
+    conn = sqlite3.connect(db_path)
+    try:
+        for provider_id, settings_config in conn.execute(
+            "SELECT id, settings_config FROM providers WHERE app_type='codex'"
+        ):
+            current = json_config_effort(settings_config)
+            if current is not None and current != effort:
+                updated, _ = replace_json_config_effort(settings_config, effort)
+                conn.execute(
+                    "UPDATE providers SET settings_config=? "
+                    "WHERE id=? AND app_type='codex'",
+                    (updated, provider_id),
+                )
+        for key, value in conn.execute(
+            "SELECT key, value FROM settings WHERE value LIKE '%model_reasoning_effort%'"
+        ):
+            current = extract_configured_effort(value)
+            if current is not None and current != effort:
+                updated, _ = replace_configured_effort(value, effort)
+                conn.execute("UPDATE settings SET value=? WHERE key=?", (updated, key))
+        for app_type, original_config in conn.execute(
+            "SELECT app_type, original_config FROM proxy_live_backup "
+            "WHERE original_config LIKE '%model_reasoning_effort%'"
+        ):
+            current = json_config_effort(original_config)
+            if current is not None and current != effort:
+                updated, _ = replace_json_config_effort(original_config, effort)
+                conn.execute(
+                    "UPDATE proxy_live_backup SET original_config=? WHERE app_type=?",
+                    (updated, app_type),
+                )
+        conn.commit()
+    finally:
+        conn.close()
+    return changes, backup_path
+
+
 def default_codex_home() -> Path:
     configured = os.environ.get("CODEX_HOME")
     return Path(configured).expanduser() if configured else Path.home() / ".codex"
@@ -295,6 +434,11 @@ def main() -> int:
         "--effort",
         help="also set top-level model_reasoning_effort, for example max",
     )
+    parser.add_argument(
+        "--db",
+        default=str(Path.home() / ".cc-switch" / "cc-switch.db"),
+        help="cc-switch database to check and repair",
+    )
     parser.add_argument("--check", action="store_true", help="report drift and exit without writing")
     parser.add_argument("--dry-run", action="store_true", help="show what would change without writing")
     args = parser.parse_args()
@@ -306,6 +450,15 @@ def main() -> int:
     if args.effort is not None and args.effort not in descriptions:
         print(f"unknown reasoning effort: {args.effort}")
         return 2
+
+    db_path = Path(args.db).expanduser()
+    db_changes: list[str] = []
+    if args.effort is None:
+        print("note: --effort is required to check/repair cc-switch database")
+    elif db_path.exists():
+        db_changes = database_drift(db_path, args.effort)
+    else:
+        print(f"warning: cc-switch database not found: {db_path}")
 
     config_path = Path(args.config).expanduser()
     if not config_path.exists():
@@ -363,10 +516,10 @@ def main() -> int:
             print(f"  {unresolved_model}")
 
     has_catalog_changes = any(catalog_changes.values())
-    if not config_changes and not has_catalog_changes and catalog_paths:
+    if not config_changes and not has_catalog_changes and not db_changes and catalog_paths:
         print("OK: active effort and all checked tiers match the expected map")
         return 0
-    if not config_changes and not has_catalog_changes:
+    if not config_changes and not has_catalog_changes and not db_changes:
         print("OK: config.toml effort and tiers match; no catalog checked")
         return 0
 
@@ -376,6 +529,8 @@ def main() -> int:
     for catalog_path, changes in catalog_changes.items():
         for change in changes:
             print(f"  {catalog_path.name}: {change}")
+    for change in db_changes:
+        print(f"  cc-switch.db: {change}")
 
     if args.check or args.dry_run:
         action = "check" if args.check else "dry-run"
@@ -385,6 +540,10 @@ def main() -> int:
     backup_dir = Path(args.backup_dir).expanduser()
     config_backup = backup(config_path, backup_dir)
     print(f"backup: {config_backup}")
+    db_backup: Path | None = None
+    if db_changes:
+        db_backup = repair_database(db_path, args.effort, backup_dir)[1]
+        print(f"backup: {db_backup}")
 
     for catalog_path, changes in catalog_changes.items():
         if not changes:
@@ -407,7 +566,10 @@ def main() -> int:
     tomllib.loads(config_path.read_text(encoding="utf-8"))
     for catalog_path in catalog_paths:
         json.loads(catalog_path.read_text(encoding="utf-8"))
-    print("validation: config.toml and checked catalogs parse OK")
+    if db_changes and database_drift(db_path, args.effort):
+        print("validation failed: cc-switch database still has drift")
+        return 1
+    print("validation: config.toml, checked catalogs, and cc-switch database parse OK")
     print("restart Codex (or start a new session) for the change to take effect")
     return 0
 

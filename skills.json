@@ -19,13 +19,15 @@
       ]
     },
     {
-      "name": "cc-switch-reasoning-tier-repair",
-      "description": "检查并修复 Codex 与 cc-switch 模型 reasoning 档位配置",
+      "name": "ccswitchmulti-reasoning-tier-repair",
+      "description": "检查并修复 CCSwitchMulti 与 Codex 模型 reasoning 档位配置",
       "files": [
         "SKILL.md",
         "agents/openai.yaml",
         "scripts/repair.py",
-        "references/expected-tier-map.json"
+        "references/expected-tier-map.json",
+        "references/ccswitch-version.json",
+        "tests/test_repair.py"
       ]
     },
     {

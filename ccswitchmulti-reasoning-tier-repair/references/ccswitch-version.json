@@ -1,0 +1,8 @@
+{
+  "ccswitchmulti": {
+    "bundle_id": "com.ccswitchmulti.desktop",
+    "version": "3.19.1-9",
+    "checked_at": "2026-08-06",
+    "notes": "Native Codex Responses passthrough preserves reasoning.effort. Anthropic/OpenRouter response transforms clamp max to xhigh."
+  }
+}
