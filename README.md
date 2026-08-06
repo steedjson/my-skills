@@ -10,7 +10,7 @@
 
 ### [delegate-execution-agent](./delegate-execution-agent/)
 
-建立轻量主 Agent 与执行 Agent 分工。保持主模型不变，优先选择当前可用的 GPT-5.6 Luna Max，其次选择 DeepSeek Flash 的最高实际可用 effort；首选均不可用时，从实时 Agent 列表提供候选。
+建立轻量主 Agent 与执行 Agent 分工。保持主模型不变，默认使用当前可用的 GPT-5.6 Luna Max；首次委派前允许用户选择其他实际可用模型，并通过原生 `spawn_agent` 显式传入模型与 effort。子 Agent 只在阻塞、需要决策或可交付时反馈，主 Agent 使用阻塞式等待，避免高频轮询。
 
 ### [ccswitchmulti-reasoning-tier-repair](./ccswitchmulti-reasoning-tier-repair/)
 

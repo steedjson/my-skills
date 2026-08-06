@@ -13,7 +13,7 @@
     },
     {
       "name": "delegate-execution-agent",
-      "description": "Lightweight main-agent and execution-agent delegation with live model discovery",
+      "description": "Lightweight main-agent and execution-agent delegation with task-level model confirmation and event-driven feedback",
       "files": [
         "SKILL.md"
       ]
