@@ -32,6 +32,8 @@
 
 在用户级统一接入 Codex 生命周期事件。仅当仓库存在 `.wolf/` 或 `.codegraph/` 时启用：转发 OpenWolf 本地 hook，并注入 CodeGraph 优先导航规则。
 
+完整安装 / 使用 / 验证 / 卸载说明见 [`openai/openwolf-codegraph/README.md`](./openai/openwolf-codegraph/README.md)。
+
 ---
 
 ## 安装
@@ -70,12 +72,27 @@ python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .
 首次本地安装：
 
 ```bash
-codex plugin marketplace add openai
+# marketplace 源指向本仓库 openai/ 目录
+codex plugin marketplace add /Users/changsailong/BDSYNC/self/AI/tools/my-skills/openai
+
 codex plugin add semantic-model-router@my-skills-local
 codex plugin add openwolf-codegraph@my-skills-local
 ```
 
-安装或更新后，重新信任 hook，并在新 Codex 任务中测试。
+安装或更新后：
+
+1. 重新信任 hook
+2. 开新 Codex 任务验证（旧任务不热加载）
+3. 目标仓库准备 `.codegraph/` 和/或 `.wolf/`
+
+快速验收：
+
+```bash
+codex plugin list | rg openwolf-codegraph
+codegraph status
+```
+
+详细安装、仓库准备、日常使用、卸载与故障排查见 [`openai/openwolf-codegraph/README.md`](./openai/openwolf-codegraph/README.md)。
 
 ---
 
