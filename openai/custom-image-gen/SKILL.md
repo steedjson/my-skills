@@ -1,6 +1,6 @@
 ---
 name: custom-image-gen
-description: Generate or edit raster images through an OpenAI-compatible Image API using the active Codex config.toml Base URL and auth.json CUSTOM_IMAGE_GEN_API_KEY or OPENAI_API_KEY. Use only when the user explicitly invokes $custom-image-gen or asks for the built-in Image Gen workflow with a custom provider, custom endpoint, or Codex-managed credentials. This Skill is standalone and contains no scripts.
+description: Generate or edit raster images through an OpenAI-compatible Image API using auth.json CUSTOM_IMAGE_GEN_URL when present, otherwise the active Codex config.toml Base URL, plus auth.json CUSTOM_IMAGE_GEN_API_KEY or OPENAI_API_KEY. Use only when the user explicitly invokes $custom-image-gen or asks for the built-in Image Gen workflow with a custom provider, custom endpoint, or Codex-managed credentials. This Skill is standalone and contains no scripts.
 ---
 
 # Custom Image Gen
@@ -11,27 +11,27 @@ Follow the normal Image Gen workflow for raster image generation and editing, bu
 
 The primary configuration changes from the normal Image Gen workflow are:
 
-1. Read the active provider's `base_url` from `$CODEX_HOME/config.toml`; when `CODEX_HOME` is unset, use `~/.codex/config.toml`.
+1. Read the top-level `CUSTOM_IMAGE_GEN_URL` from `$CODEX_HOME/auth.json` first; when it is absent or blank, read the active provider's `base_url` from `$CODEX_HOME/config.toml`. When `CODEX_HOME` is unset, use `~/.codex/auth.json` and `~/.codex/config.toml`.
 2. Read the top-level `CUSTOM_IMAGE_GEN_API_KEY` value from `$CODEX_HOME/auth.json` first; when it is absent, use the top-level `OPENAI_API_KEY` value from the same file. When `CODEX_HOME` is unset, use `~/.codex/auth.json`.
 
-Do not read `OPENAI_BASE_URL`, `OPENAI_API_KEY`, or `CUSTOM_IMAGE_GEN_API_KEY` environment variables, other provider profiles, or official defaults. Always keep the Base URL from `config.toml`; both candidate Keys must come from the same `auth.json`. If both auth-file Keys are missing, stop and explain which local configuration is missing; never ask the user to paste a Key into chat.
+Do not read `OPENAI_BASE_URL`, `OPENAI_API_KEY`, or `CUSTOM_IMAGE_GEN_API_KEY` environment variables, other provider profiles, or official defaults. Use `CUSTOM_IMAGE_GEN_URL` as the request URL when it is present; use `config.toml` only as the fallback URL source. Both candidate Keys must come from the same `auth.json`. If both auth-file Keys are missing, stop and explain which local configuration is missing; never ask the user to paste a Key into chat.
 
 Because the platform-managed built-in image tool cannot be redirected to an arbitrary Base URL, an explicit `$custom-image-gen` request must use the Image API path at the resolved endpoint. Do not silently switch back to the platform-managed tool or to another provider.
 
 ## Resolve the endpoint safely
 
-1. Parse `model_provider` from `config.toml`.
-2. Read `model_providers.<model_provider>.base_url`.
+1. Read the top-level `CUSTOM_IMAGE_GEN_URL` from `auth.json`.
+2. If that value is absent or blank, parse `model_provider` from `config.toml` and read `model_providers.<model_provider>.base_url`.
 3. Read only the top-level `CUSTOM_IMAGE_GEN_API_KEY` and `OPENAI_API_KEY` strings from `auth.json`, preferring the former.
-4. Keep the Base URL and candidate Keys in memory for the current request only. Never print, log, persist, or return a Key.
+4. Keep the resolved request URL and candidate Keys in memory for the current request only. Never print, log, persist, or return a Key.
 5. Send requests to the same host using `models`, `images/generations`, or `images/edits`.
-6. If the configured URL does not already end in `/v1`, a 404/405 may be retried once at the same host with `/v1`; never switch hosts or hide authentication and quota errors.
+6. If the resolved URL does not already end in `/v1`, a 404/405 may be retried once at the same host with `/v1`; never switch hosts or hide authentication and quota errors.
 
 When the resolved host is not `api.openai.com`, warn once that the prompt, uploaded images, generated images, and selected credential are sent to that third party.
 
 ## API execution and Key fallback
 
-Before selecting a default model, probe the same host's `/models` endpoint with `CUSTOM_IMAGE_GEN_API_KEY` first. Treat only an explicitly listed image model as confirmed. If the preferred Key returns 401/403 or does not have image capability, retry the probe once with `OPENAI_API_KEY` from the same `auth.json`. Keep the provider and Base URL unchanged.
+Before selecting a default model, probe the same host's `/models` endpoint with `CUSTOM_IMAGE_GEN_API_KEY` first. Treat only an explicitly listed image model as confirmed. If the preferred Key returns 401/403 or does not have image capability, retry the probe once with `OPENAI_API_KEY` from the same `auth.json`. Keep the provider and resolved request URL unchanged.
 
 For generation or editing, try `CUSTOM_IMAGE_GEN_API_KEY` first when present. Use `OPENAI_API_KEY` only for a clear authentication, permission, or image-capability failure. Do not retry with the second Key after invalid parameters, policy/content rejection, timeout, 5xx, or an ambiguous response that may already have completed. Never make a second paid image request when completion status is uncertain.
 
