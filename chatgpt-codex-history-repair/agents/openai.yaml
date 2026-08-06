@@ -1,0 +1,4 @@
+interface:
+  display_name: "ChatGPT Codex History Repair"
+  short_description: "Diagnose and safely restore local Codex history visibility"
+  default_prompt: "Use $chatgpt-codex-history-repair to diagnose missing ChatGPT.app Codex history with read-only checks and a dry-run repair plan."

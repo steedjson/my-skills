@@ -16,6 +16,10 @@
 
 读取实时 CCSwitchMulti 与 Codex 配置，检查并修复已核实模型的 `low`、`medium`、`high`、`xhigh`、`max`、`ultra` reasoning 档位，并检测已安装 CCSwitchMulti 运行时是否真的支持目标档位。支持检查、预览、备份和写入后 TOML/JSON/数据库验证；未知模型保留原值并报告。
 
+### [chatgpt-codex-history-repair](./chatgpt-codex-history-repair/)
+
+只处理 ChatGPT.app 内置 Codex 的本地历史可见性：先定位 active SQLite，核对 session JSONL、索引和项目提示，再做 dry-run。默认只读，写入前备份并要求明确确认；不删除会话正文，也不做 provider 迁移。
+
 ### [django-api-change](./django-api-change/) *(project: wework)*
 
 在 wework 项目中实现、调试或审查 Django API 与 Service 变更。涵盖路由、视图、参数 Schema、Service、模型、迁移、权限、租户隔离、事务、软删除、导出和 API 测试场景。遵循 View → Form/Schema → Service → Model 分层约定。
@@ -49,6 +53,9 @@ cp delegate-execution-agent/SKILL.md ~/.claude/skills/delegate-execution-agent/S
 
 mkdir -p ~/.claude/skills/ccswitchmulti-reasoning-tier-repair
 cp -R ccswitchmulti-reasoning-tier-repair/. ~/.claude/skills/ccswitchmulti-reasoning-tier-repair/
+
+mkdir -p ~/.claude/skills/chatgpt-codex-history-repair
+cp -R chatgpt-codex-history-repair/. ~/.claude/skills/chatgpt-codex-history-repair/
 ```
 
 Codex 插件从各插件目录构建与验证。`semantic-model-router` 当前验证命令：
@@ -109,6 +116,9 @@ my-skills/
 │   ├── agents/openai.yaml
 │   ├── references/expected-tier-map.json
 │   └── scripts/repair.py
+├── chatgpt-codex-history-repair/
+│   ├── SKILL.md
+│   └── agents/openai.yaml
 ├── openai/
 │   ├── .agents/plugins/marketplace.json
 │   ├── openwolf-codegraph/

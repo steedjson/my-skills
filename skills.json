@@ -31,6 +31,14 @@
       ]
     },
     {
+      "name": "chatgpt-codex-history-repair",
+      "description": "诊断并安全修复 ChatGPT.app 内置 Codex 本地历史可见性",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml"
+      ]
+    },
+    {
       "name": "django-api-change",
       "description": "Implement, debug, or review Django API and Service changes in the wework project",
       "project": "wework",
