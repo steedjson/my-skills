@@ -20,11 +20,13 @@ description: 为 Codex 任务建立轻量主 Agent 与执行 Agent 分工。用�
 1. 若用户已明确指定模型和 effort，直接使用该组合。
 2. 否则向用户展示 Luna Max 作为默认选项，并列出最多 5 个当前运行时实际接受的替代组合。每项包含完整模型 ID、effort 和已知限制。
 3. 用户明确选择替代模型后，仅对当前顶层任务覆盖默认模型；不修改全局配置。
-4. 用户未确认时不启动子 Agent；继续由主 Agent 处理或等待确认。
-5. 原生路径兼容时，将选定的完整模型 ID 和 `reasoning_effort` 显式传入 `spawn_agent`。`task_name` 只是实例标识，`agent_type` 只是宿主支持的执行角色，不代表 custom agent 配置名。
-6. 原生跨模型路径出现加密 child payload、模型继承或 provider 命名空间兼容错误时，不再使用默认 Agent 重试；改用下方独立 `codex exec` 路径。
-7. 完整 provider 模型 ID 必须来自当前运行时。不得把 provider-facing ID 擅自缩写为上游模型名，也不得永久假定示例 ID 始终有效。
-8. 模型或 effort 被拒绝、继承主模型或无法由运行时确认时立即停止。禁止静默替换、自动降级或声称未运行的模型已运行。
+4. 若任务不适合独立委派，留在主 Agent；若任务适合委派但用户未明确确认模型和 effort，必须先提问并结束当前回合，不得继续执行委派。
+5. “Luna Max”只能作为推荐项，不代表用户已授权。`继续`、`好`、`按默认`等没有同时包含完整模型 ID 和 effort 的回复，不算委派确认。
+6. 有效确认必须明确包含完整模型 ID 和 effort，例如：`确认委派 model=gpt-5.6-luna effort=max`。确认只对当前顶层任务有效。
+7. 原生路径兼容时，将选定的完整模型 ID 和 `reasoning_effort` 显式传入 `spawn_agent`。`task_name` 只是实例标识，`agent_type` 只是宿主支持的执行角色，不代表 custom agent 配置名。
+8. 原生跨模型路径出现加密 child payload、模型继承或 provider 命名空间兼容错误时，不再使用默认 Agent 重试；改用下方独立 `codex exec` 路径。
+9. 完整 provider 模型 ID 必须来自当前运行时。不得把 provider-facing ID 擅自缩写为上游模型名，也不得永久假定示例 ID 始终有效。
+10. 模型或 effort 被拒绝、继承主模型或无法由运行时确认时立即停止。禁止静默替换、自动降级或声称未运行的模型已运行。
 
 ## 跨模型兼容路径
 
