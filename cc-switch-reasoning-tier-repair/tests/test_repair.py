@@ -16,6 +16,7 @@ DESCRIPTIONS = {
     "max": "Maximum",
 }
 EXPECTED = {
+    "deepseek-v4-flash": ["low", "xhigh", "max"],
     "deepseek-v4-flash-0731-csap-tokenplan": ["low", "xhigh", "max"],
 }
 
@@ -62,6 +63,28 @@ models = [
 
         self.assertIn('model = "unknown-model"', updated)
         self.assertEqual(["unknown-model"], unresolved)
+
+    def test_repairs_deepseek_alias_in_catalog(self):
+        catalog = {
+            "models": [
+                {
+                    "slug": "deepseek-v4-flash",
+                    "supported_reasoning_levels": [
+                        {"effort": "low", "description": "Low"},
+                        {"effort": "xhigh", "description": "Extra high"},
+                    ],
+                }
+            ]
+        }
+
+        changes, unresolved = repair.repair_catalog(
+            catalog, EXPECTED, DESCRIPTIONS
+        )
+
+        levels = catalog["models"][0]["supported_reasoning_levels"]
+        self.assertEqual(["low", "xhigh", "max"], [item["effort"] for item in levels])
+        self.assertTrue(any("deepseek-v4-flash" in change for change in changes))
+        self.assertEqual([], unresolved)
 
 
 if __name__ == "__main__":
