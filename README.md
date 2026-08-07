@@ -21,16 +21,6 @@
 
 使用 Codex App 原生顶层任务建立轻量规划与执行分工。规划任务保留需求、架构、审查和验收职责；用户确认模型与 effort 后创建可见执行任务，并通过正式任务 ID 等待、处理阻塞和继续派发。
 
-#### [cc-switch-reasoning-tier-repair](./cc-switch-reasoning-tier-repair/)
-
-读取实时 CCSwitchMulti 与 Codex 配置，检查并修复已核实模型的 `low`、`medium`、`high`、`xhigh`、`max`、`ultra` reasoning 档位，并检测已安装 CCSwitchMulti 运行时是否真的支持目标档位。支持检查、预览、备份和写入后 TOML/JSON/数据库验证；未知模型保留原值并报告。
-
-### Codex 维护（codex-maintenance）
-
-#### [chatgpt-codex-history-repair](./chatgpt-codex-history-repair/)
-
-只处理 ChatGPT.app 内置 Codex 的本地历史可见性：先定位 active SQLite，核对 session JSONL、索引和项目提示，再做 dry-run。默认只读，写入前备份并要求明确确认；不删除会话正文，也不做 provider 迁移。
-
 ### 媒体生成（media-generation）
 
 #### [custom-image-gen](./custom-image-gen/)
@@ -59,7 +49,6 @@
 
 ### 名称迁移
 
-- `ccswitchmulti-reasoning-tier-repair` 已更名为 `cc-switch-reasoning-tier-repair`。
 - `openwolf-codegraph@my-skills-local` 已更名为 `openwolf-codegraph-bridge@vlong-skills-local`。
 - 仓库改名不会自动删除已安装的旧 Skill、旧插件或旧 marketplace 注册。先安装并验证新名称，再按实际安装状态清理旧条目。
 
@@ -71,12 +60,6 @@ cp codexradar-model-advisor/SKILL.md ~/.claude/skills/codexradar-model-advisor/S
 
 mkdir -p ~/.claude/skills/model-delegate
 cp model-delegate/SKILL.md ~/.claude/skills/model-delegate/SKILL.md
-
-mkdir -p ~/.claude/skills/cc-switch-reasoning-tier-repair
-cp -R cc-switch-reasoning-tier-repair/. ~/.claude/skills/cc-switch-reasoning-tier-repair/
-
-mkdir -p ~/.claude/skills/chatgpt-codex-history-repair
-cp -R chatgpt-codex-history-repair/. ~/.claude/skills/chatgpt-codex-history-repair/
 
 mkdir -p ~/.claude/skills/custom-image-gen
 cp -R custom-image-gen/. ~/.claude/skills/custom-image-gen/
@@ -127,14 +110,6 @@ my-skills/
 │   └── SKILL.md
 ├── model-delegate/
 │   └── SKILL.md
-├── cc-switch-reasoning-tier-repair/
-│   ├── SKILL.md
-│   ├── agents/openai.yaml
-│   ├── references/expected-tier-map.json
-│   └── scripts/repair.py
-├── chatgpt-codex-history-repair/
-│   ├── SKILL.md
-│   └── agents/openai.yaml
 ├── custom-image-gen/
 │   ├── SKILL.md
 │   └── agents/openai.yaml

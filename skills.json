@@ -21,28 +21,6 @@
       ]
     },
     {
-      "name": "cc-switch-reasoning-tier-repair",
-      "category": "models-and-routing",
-      "description": "检查并修复 CCSwitchMulti 与 Codex 模型 reasoning 档位配置",
-      "files": [
-        "SKILL.md",
-        "agents/openai.yaml",
-        "scripts/repair.py",
-        "references/expected-tier-map.json",
-        "references/ccswitch-version.json",
-        "tests/test_repair.py"
-      ]
-    },
-    {
-      "name": "chatgpt-codex-history-repair",
-      "category": "codex-maintenance",
-      "description": "诊断并安全修复 ChatGPT.app 内置 Codex 本地历史可见性",
-      "files": [
-        "SKILL.md",
-        "agents/openai.yaml"
-      ]
-    },
-    {
       "name": "custom-image-gen",
       "category": "media-generation",
       "description": "通过自定义 Codex 凭据和端点复用系统 Image Gen 工作流",

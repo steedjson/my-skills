@@ -22,8 +22,6 @@ my-skills/
 │       └── README.md
 ├── codexradar-model-advisor/
 ├── model-delegate/
-├── cc-switch-reasoning-tier-repair/
-├── chatgpt-codex-history-repair/
 ├── custom-image-gen/
 ├── django-api-change/
 ├── plans/
@@ -99,8 +97,7 @@ Add a `category` field to each `skills.json` entry and group README display by t
 
 | Category | Skills |
 | --- | --- |
-| `models-and-routing` | `codexradar-model-advisor`, `model-delegate`, `cc-switch-reasoning-tier-repair` |
-| `codex-maintenance` | `chatgpt-codex-history-repair` |
+| `models-and-routing` | `codexradar-model-advisor`, `model-delegate` |
 | `media-generation` | `custom-image-gen` |
 | `framework-workflows` | `django-api-change` |
 
@@ -122,7 +119,6 @@ Keep directories flat. Category changes discovery and documentation only.
 
 ## Phase 2.5 — clarify package identities
 
-- Rename `ccswitchmulti-reasoning-tier-repair` to `cc-switch-reasoning-tier-repair` for readable product namespacing while keeping the UI display name `CCSwitchMulti Reasoning 档位修复`.
 - Rename plugin `openwolf-codegraph` to `openwolf-codegraph-bridge` because it bridges lifecycle events and navigation guidance; it is not the OpenWolf or CodeGraph runtime itself.
 - Rename marketplace `my-skills-local` to `vlong-skills-local` to avoid a generic globally visible identifier.
 - Preserve established, clear Skill IDs such as `custom-image-gen`, `model-delegate`, and `django-api-change`; avoid churn without a concrete discovery or ambiguity benefit.
