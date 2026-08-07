@@ -1,4 +1,4 @@
-# OpenWolf + CodeGraph
+# OpenWolf CodeGraph Bridge
 
 Codex 生命周期插件。桥接仓库本地 OpenWolf hooks，并在存在 CodeGraph 索引时注入优先导航提示。
 
@@ -30,19 +30,13 @@ Codex 生命周期插件。桥接仓库本地 OpenWolf hooks，并在存在 Code
 本仓库 marketplace 源：
 
 ```text
-/Users/changsailong/BDSYNC/self/AI/tools/my-skills/openai
+/Users/changsailong/BDSYNC/self/AI/tools/my-skills
 ```
 
-若 `~/.codex/config.toml` 还没有 `my-skills-local`，先加：
+若 `~/.codex/config.toml` 还没有 `vlong-skills-local`，先加：
 
 ```bash
-codex plugin marketplace add /Users/changsailong/BDSYNC/self/AI/tools/my-skills/openai
-```
-
-也可用 personal 源：
-
-```text
-/Users/changsailong/plugins/openwolf-codegraph
+codex plugin marketplace add /Users/changsailong/BDSYNC/self/AI/tools/my-skills
 ```
 
 ### 2. 安装插件
@@ -50,13 +44,7 @@ codex plugin marketplace add /Users/changsailong/BDSYNC/self/AI/tools/my-skills/
 推荐本仓库源：
 
 ```bash
-codex plugin add openwolf-codegraph@my-skills-local
-```
-
-或 personal 源：
-
-```bash
-codex plugin add openwolf-codegraph@personal
+codex plugin add openwolf-codegraph-bridge@vlong-skills-local
 ```
 
 ### 3. 信任 hooks
@@ -70,7 +58,7 @@ codex plugin add openwolf-codegraph@personal
 ### 5. 确认安装状态
 
 ```bash
-codex plugin list | rg openwolf-codegraph
+codex plugin list | rg openwolf-codegraph-bridge
 ```
 
 期望：`installed, enabled`
@@ -119,7 +107,7 @@ CodeGraph is active. For code discovery and impact analysis, use codegraph_explo
 
 ## 日常使用
 
-正确用法不是“调用 openwolf-codegraph”，而是：
+正确用法不是“调用 openwolf-codegraph-bridge”，而是：
 
 1. 插件 installed + enabled，hooks 已信任
 2. 目标仓库有 `.codegraph/` 和/或 `.wolf/`
@@ -152,7 +140,7 @@ codegraph impact SomeSymbol
 
 | 检查 | 期望 |
 |---|---|
-| `codex plugin list` 且过滤 `openwolf-codegraph` | installed, enabled |
+| `codex plugin list` 且过滤 `openwolf-codegraph-bridge` | installed, enabled |
 | 仓库有 `.codegraph/` | 新任务 SessionStart 出现 CodeGraph 提示 |
 | 仓库有 `.wolf/hooks/*` | 写文件时触发 pre/post-write |
 | 普通仓库无标记 | 无输出、无副作用 |
@@ -161,7 +149,7 @@ codegraph impact SomeSymbol
 源码校验：
 
 ```bash
-cd openai/openwolf-codegraph
+cd plugins/openwolf-codegraph-bridge
 node --check hooks/openwolf.mjs
 python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .
 ```
@@ -175,23 +163,21 @@ python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .
 3. 开新任务验证
 
 ```bash
-codex plugin add openwolf-codegraph@my-skills-local
+codex plugin add openwolf-codegraph-bridge@vlong-skills-local
 # 或按你当前 marketplace 名称重装
 ```
 
 ## 卸载
 
 ```bash
-codex plugin remove openwolf-codegraph@my-skills-local
-# 或
-codex plugin remove openwolf-codegraph@personal
+codex plugin remove openwolf-codegraph-bridge@vlong-skills-local
 ```
 
 卸载后检查：
 
 ```bash
-codex plugin list | rg openwolf-codegraph
-rg -n "openwolf-codegraph" ~/.codex/config.toml
+codex plugin list | rg openwolf-codegraph-bridge
+rg -n "openwolf-codegraph-bridge|vlong-skills-local" ~/.codex/config.toml
 ```
 
 注意：
@@ -213,7 +199,7 @@ rg -n "openwolf-codegraph" ~/.codex/config.toml
 ## 目录
 
 ```text
-openwolf-codegraph/
+openwolf-codegraph-bridge/
 ├── .codex-plugin/plugin.json
 ├── hooks/
 │   ├── hooks.json

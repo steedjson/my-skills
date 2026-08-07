@@ -1,4 +1,4 @@
 interface:
   display_name: "CCSwitchMulti Reasoning 档位修复"
   short_description: "修复 CCSwitchMulti 与 Codex 模型 reasoning 档位"
-  default_prompt: "使用 $ccswitchmulti-reasoning-tier-repair 检查并修复当前模型 reasoning 档位配置。"
+  default_prompt: "使用 $cc-switch-reasoning-tier-repair 检查并修复当前模型 reasoning 档位配置。"

@@ -1,5 +1,5 @@
 ---
-name: ccswitchmulti-reasoning-tier-repair
+name: cc-switch-reasoning-tier-repair
 description: 检查并修复 CCSwitchMulti 与 Codex 的模型 reasoning 档位配置。用户提到 max、ultra 档位消失，CCSwitchMulti 或 Codex 重启重装后档位被恢复，模型目录与 config.toml 不一致，或要求补全模型档位时使用。
 ---
 
@@ -24,14 +24,14 @@ description: 检查并修复 CCSwitchMulti 与 Codex 的模型 reasoning 档位�
 1. 先运行检查，不写入文件：
 
    ```bash
-   python3 /path/to/ccswitchmulti-reasoning-tier-repair/scripts/repair.py --check --effort max
+   python3 /path/to/cc-switch-reasoning-tier-repair/scripts/repair.py --check --effort max
    ```
 
 2. 检查会同时报告 `config.toml`、catalog、cache 和 CCSwitchMulti 数据库中的档位漂移。
    用户明确要求修复时，先预览：
 
    ```bash
-   python3 /path/to/ccswitchmulti-reasoning-tier-repair/scripts/repair.py --dry-run --effort max
+   python3 /path/to/cc-switch-reasoning-tier-repair/scripts/repair.py --dry-run --effort max
    ```
 
 3. 预览结果符合预期后，去掉 `--dry-run` 执行修复。脚本会在写入前备份

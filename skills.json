@@ -1,11 +1,12 @@
 {
-  "name": "vlong",
+  "name": "vlong-skills",
   "version": "1.0.0",
-  "description": "Personal Claude Code skills collection",
+  "description": "Personal Agent Skills and Codex plugins source collection",
   "repo": "https://github.com/steedjson/my-skills",
   "skills": [
     {
       "name": "codexradar-model-advisor",
+      "category": "models-and-routing",
       "description": "Live CodexRadar measurements and OpenAI Codex model/effort recommendations",
       "files": [
         "SKILL.md"
@@ -13,13 +14,15 @@
     },
     {
       "name": "model-delegate",
+      "category": "models-and-routing",
       "description": "Lightweight planner and executor coordination through native Codex App top-level tasks",
       "files": [
         "SKILL.md"
       ]
     },
     {
-      "name": "ccswitchmulti-reasoning-tier-repair",
+      "name": "cc-switch-reasoning-tier-repair",
+      "category": "models-and-routing",
       "description": "检查并修复 CCSwitchMulti 与 Codex 模型 reasoning 档位配置",
       "files": [
         "SKILL.md",
@@ -32,6 +35,7 @@
     },
     {
       "name": "chatgpt-codex-history-repair",
+      "category": "codex-maintenance",
       "description": "诊断并安全修复 ChatGPT.app 内置 Codex 本地历史可见性",
       "files": [
         "SKILL.md",
@@ -40,6 +44,7 @@
     },
     {
       "name": "custom-image-gen",
+      "category": "media-generation",
       "description": "通过自定义 Codex 凭据和端点复用系统 Image Gen 工作流",
       "files": [
         "SKILL.md",
@@ -48,6 +53,7 @@
     },
     {
       "name": "django-api-change",
+      "category": "framework-workflows",
       "description": "Implement, debug, or review Django API and Service changes in the wework project",
       "project": "wework",
       "files": [

@@ -9,6 +9,9 @@
 - `skills.json`: repository metadata and public skill registry.
 - `<skill-name>/SKILL.md`: required skill definition.
 - `<skill-name>/references/`, `scripts/`, `assets/`: optional skill resources.
+- `plugins/<plugin-name>/`: installable Codex plugin packages.
+- `.agents/plugins/marketplace.json`: repository plugin marketplace catalog; local plugin paths resolve relative to repository root.
+- `skills.json` `category`: discovery and classification metadata only, never a path resolver.
 - `README.md`: public skill list and usage overview.
 - `codexradar-model-advisor/`: current OpenAI Codex model-advice skill.
 
@@ -34,6 +37,7 @@ Follow portable Agent Skills layout.
 - `README.md`: optional. Do not create auxiliary docs solely to satisfy installer.
 - Add reusable scripts only when deterministic execution or meaningful reuse warrants them. Test every added script.
 - Register every shipped skill in `skills.json`; keep `files` list accurate and remove entries for absent skill directories.
+- Keep standalone Skill packages flat at repository root; category metadata in `skills.json` does not control paths.
 - Update root `README.md` when public skill list or install commands change.
 - Preserve source skill behavior during migrations. Do not restore files removed by later source revisions.
 
@@ -58,6 +62,8 @@ git diff --check
 For new or changed skills, also run Skill Creator `quick_validate.py` when available. Use Python environment containing `PyYAML`.
 
 For resource scripts, run focused script tests. For source migrations, compare migrated files byte-for-byte when exact preservation is required.
+
+For plugin changes, validate `plugins/<plugin-name>/` with Plugin Creator `validate_plugin.py`, then confirm hook activation in a new Codex task after re-trusting hooks. Source validation does not prove installed-cache activation.
 
 ## Worktree Safety
 

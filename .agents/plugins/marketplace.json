@@ -1,14 +1,14 @@
 {
-  "name": "my-skills-local",
+  "name": "vlong-skills-local",
   "interface": {
-    "displayName": "My Skills Local"
+    "displayName": "vlong Skills (Local)"
   },
   "plugins": [
     {
-      "name": "openwolf-codegraph",
+      "name": "openwolf-codegraph-bridge",
       "source": {
         "source": "local",
-        "path": "./openwolf-codegraph"
+        "path": "./plugins/openwolf-codegraph-bridge"
       },
       "policy": {
         "installation": "AVAILABLE",
