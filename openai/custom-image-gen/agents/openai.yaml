@@ -1,7 +1,7 @@
 interface:
   display_name: "Custom Image Gen"
-  short_description: "Custom config image generation and editing workflow"
-  default_prompt: "使用 $custom-image-gen 按当前 Codex 自定义服务配置生成或编辑图片。"
+  short_description: "Route system Image Gen through custom Codex config"
+  default_prompt: "使用 $custom-image-gen 复用系统 Image Gen 流程，并通过当前 Codex 自定义地址和密钥生成或编辑图片。"
 
 policy:
   allow_implicit_invocation: false
