@@ -13,7 +13,7 @@
     },
     {
       "name": "delegate-execution-agent",
-      "description": "Lightweight main-agent and execution-agent delegation with task-level model confirmation and event-driven feedback",
+      "description": "Lightweight planner and executor coordination through native Codex App top-level tasks",
       "files": [
         "SKILL.md"
       ]

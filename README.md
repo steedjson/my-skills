@@ -10,7 +10,7 @@
 
 ### [delegate-execution-agent](./delegate-execution-agent/)
 
-建立轻量主 Agent 与执行 Agent 分工。保持主模型不变，默认使用当前可用的 GPT-5.6 Luna Max；首次委派前允许用户选择其他实际可用模型，并通过原生 `spawn_agent` 显式传入模型与 effort。子 Agent 只在阻塞、需要决策或可交付时反馈，主 Agent 使用阻塞式等待，避免高频轮询。
+使用 Codex App 原生顶层任务建立轻量规划与执行分工。规划任务保留需求、架构、审查和验收职责；用户确认模型与 effort 后创建可见执行任务，并通过正式任务 ID 等待、处理阻塞和继续派发。
 
 ### [ccswitchmulti-reasoning-tier-repair](./ccswitchmulti-reasoning-tier-repair/)
 
