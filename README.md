@@ -19,7 +19,7 @@
 
 #### [model-delegate](./model-delegate/)
 
-使用 Codex App 原生顶层任务建立轻量规划与执行分工。规划任务保留需求、架构、审查和验收职责；用户确认模型与 effort 后创建可见执行任务，并通过正式任务 ID 等待、处理阻塞和继续派发。
+使用 Codex App 原生顶层任务建立轻量规划与执行分工。可先运行 `$grill-me` 收敛方案，再显式调用 `$model-delegate` 委派实现；规划任务保留需求、架构、审查和验收职责，执行任务只处理已确认的边界。
 
 ### 媒体生成（media-generation）
 

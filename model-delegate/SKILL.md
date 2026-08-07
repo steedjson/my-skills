@@ -1,11 +1,34 @@
 ---
 name: model-delegate
-description: 为 Codex 建立轻量双任务分工。用户要求昂贵模型规划审查、便宜模型执行、跨任务委派、执行受阻后反馈，或指定 Luna、DeepSeek 等执行模型时使用。
+description: 为 Codex 建立轻量双任务分工。适用于先用 grill-me 确认方案，再把边界清楚的实现任务委派给指定模型执行，并由主任务统一审查验收。
 ---
 
 # 模型委派
 
 使用 Codex App 原生顶层任务协调。当前任务作为规划与审查任务，另建一个可见执行任务。不要使用子智能体协议、独立 `codex exec`、脚本、插件、MCP 编排、共享状态文件或高频轮询。
+
+## 与 grill-me 联动
+
+`grill-me` 只负责提问、质疑和收敛方案，不负责写代码或创建执行任务。完成 grilling 后，用户显式调用 `$model-delegate`，或明确说“按已确认方案委派执行”，本技能才开始创建执行任务。
+
+承接 grilling 结果时：
+
+1. 把最终确认的方案当作 `DECISION` 和 `INPUTS`，不要重新进行架构争论；
+2. 若方案仍有未决选择、范围或验收条件，先回到规划任务补齐，不创建执行任务；
+3. 只把已确认的边界、文件范围、验收条件和约束发送给执行任务；
+4. 主任务不直接落地实现，只负责拆解、委派、等待、审查和验收。
+
+推荐交接格式：
+
+```text
+GRILLING_STATUS: COMPLETE
+DECISION: 已确认的实现方案
+SCOPE: 本次只执行的范围
+ACCEPTANCE: 可验证的完成条件
+FILE_BOUNDARIES: 允许读取或修改的文件
+CONSTRAINTS: 用户已确认的限制
+OPEN_RISKS: 仍需主任务审查的风险
+```
 
 先搜索或加载当前运行面提供的任务协调工具。若没有 `create_thread`、`send_message_to_thread`、`wait_threads` 和 `read_thread`，停止并报告不兼容。不得静默改用默认 Agent 或其他执行路径。
 
