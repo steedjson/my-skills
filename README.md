@@ -8,7 +8,7 @@
 
 读取 CodexRadar 当前实测数据与 15 天社区评分历史，为 OpenAI Codex 模型和 reasoning effort 提供质量、速度、成本建议。仅推荐当前有实测数据的组合，支持 Codex、Claude Code 和其他 Agent Skills 兼容宿主。
 
-### [delegate-execution-agent](./delegate-execution-agent/)
+### [model-delegate](./model-delegate/)
 
 使用 Codex App 原生顶层任务建立轻量规划与执行分工。规划任务保留需求、架构、审查和验收职责；用户确认模型与 effort 后创建可见执行任务，并通过正式任务 ID 等待、处理阻塞和继续派发。
 
@@ -48,8 +48,8 @@
 mkdir -p ~/.claude/skills/codexradar-model-advisor
 cp codexradar-model-advisor/SKILL.md ~/.claude/skills/codexradar-model-advisor/SKILL.md
 
-mkdir -p ~/.claude/skills/delegate-execution-agent
-cp delegate-execution-agent/SKILL.md ~/.claude/skills/delegate-execution-agent/SKILL.md
+mkdir -p ~/.claude/skills/model-delegate
+cp model-delegate/SKILL.md ~/.claude/skills/model-delegate/SKILL.md
 
 mkdir -p ~/.claude/skills/ccswitchmulti-reasoning-tier-repair
 cp -R ccswitchmulti-reasoning-tier-repair/. ~/.claude/skills/ccswitchmulti-reasoning-tier-repair/
@@ -101,7 +101,7 @@ codegraph status
 my-skills/
 ├── codexradar-model-advisor/
 │   └── SKILL.md
-├── delegate-execution-agent/
+├── model-delegate/
 │   └── SKILL.md
 ├── ccswitchmulti-reasoning-tier-repair/
 │   ├── SKILL.md

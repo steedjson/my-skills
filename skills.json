@@ -12,7 +12,7 @@
       ]
     },
     {
-      "name": "delegate-execution-agent",
+      "name": "model-delegate",
       "description": "Lightweight planner and executor coordination through native Codex App top-level tasks",
       "files": [
         "SKILL.md"

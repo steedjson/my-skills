@@ -1,9 +1,9 @@
 ---
-name: delegate-execution-agent
+name: model-delegate
 description: 为 Codex 建立轻量双任务分工。用户要求昂贵模型规划审查、便宜模型执行、跨任务委派、执行受阻后反馈，或指定 Luna、DeepSeek 等执行模型时使用。
 ---
 
-# 双任务执行分工
+# 模型委派
 
 使用 Codex App 原生顶层任务协调。当前任务作为规划与审查任务，另建一个可见执行任务。不要使用子智能体协议、独立 `codex exec`、脚本、插件、MCP 编排、共享状态文件或高频轮询。
 
