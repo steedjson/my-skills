@@ -39,6 +39,14 @@
       ]
     },
     {
+      "name": "custom-image-gen",
+      "description": "通过自定义 Codex 凭据和端点复用系统 Image Gen 工作流",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml"
+      ]
+    },
+    {
       "name": "django-api-change",
       "description": "Implement, debug, or review Django API and Service changes in the wework project",
       "project": "wework",

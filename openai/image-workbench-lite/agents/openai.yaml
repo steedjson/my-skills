@@ -1,4 +1,0 @@
-interface:
-  display_name: "轻量图片工作台"
-  short_description: "Text-only image workflow for quick generation and comparison"
-  default_prompt: "使用 $image-workbench-lite 以纯文本流程生成图片，并在需要时与完整工作台对比。"

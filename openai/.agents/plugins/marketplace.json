@@ -5,18 +5,6 @@
   },
   "plugins": [
     {
-      "name": "semantic-model-router",
-      "source": {
-        "source": "local",
-        "path": "./semantic-model-router"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    },
-    {
       "name": "openwolf-codegraph",
       "source": {
         "source": "local",

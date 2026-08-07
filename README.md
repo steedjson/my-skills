@@ -20,6 +20,10 @@
 
 只处理 ChatGPT.app 内置 Codex 的本地历史可见性：先定位 active SQLite，核对 session JSONL、索引和项目提示，再做 dry-run。默认只读，写入前备份并要求明确确认；不删除会话正文，也不做 provider 迁移。
 
+### [custom-image-gen](./openai/custom-image-gen/)
+
+通过 `auth.json` 和当前 Codex provider 配置解析自定义图片生成端点与凭据，再复用系统 `imagegen` Skill 和 CLI。仅负责 provider 适配，不复制系统图片生成工作流。
+
 ### [django-api-change](./django-api-change/) *(project: wework)*
 
 在 wework 项目中实现、调试或审查 Django API 与 Service 变更。涵盖路由、视图、参数 Schema、Service、模型、迁移、权限、租户隔离、事务、软删除、导出和 API 测试场景。遵循 View → Form/Schema → Service → Model 分层约定。
@@ -27,10 +31,6 @@
 ## Codex 插件
 
 `openai/` 可包含需要构建、测试、安装和显式信任 hook 的 Codex 插件运行时。插件不是独立 Agent Skill，不登记到 `skills.json`。
-
-### [semantic-model-router](./openai/semantic-model-router/)
-
-按任务语义协调 Codex 模型角色。当前只实现安全控制面，不调用模型。
 
 ### [openwolf-codegraph](./openai/openwolf-codegraph/)
 
@@ -56,16 +56,9 @@ cp -R ccswitchmulti-reasoning-tier-repair/. ~/.claude/skills/ccswitchmulti-reaso
 
 mkdir -p ~/.claude/skills/chatgpt-codex-history-repair
 cp -R chatgpt-codex-history-repair/. ~/.claude/skills/chatgpt-codex-history-repair/
-```
 
-Codex 插件从各插件目录构建与验证。`semantic-model-router` 当前验证命令：
-
-```bash
-cd openai/semantic-model-router
-npm test
-npm run lint
-npm run verify:runtime
-python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .
+mkdir -p ~/.claude/skills/custom-image-gen
+cp -R openai/custom-image-gen/. ~/.claude/skills/custom-image-gen/
 ```
 
 `openwolf-codegraph` 无构建步骤：
@@ -82,7 +75,6 @@ python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .
 # marketplace 源指向本仓库 openai/ 目录
 codex plugin marketplace add /Users/changsailong/BDSYNC/self/AI/tools/my-skills/openai
 
-codex plugin add semantic-model-router@my-skills-local
 codex plugin add openwolf-codegraph@my-skills-local
 ```
 
@@ -121,13 +113,12 @@ my-skills/
 │   └── agents/openai.yaml
 ├── openai/
 │   ├── .agents/plugins/marketplace.json
+│   ├── custom-image-gen/
+│   │   ├── SKILL.md
+│   │   └── agents/openai.yaml
 │   ├── openwolf-codegraph/
 │   │   ├── .codex-plugin/plugin.json
 │   │   └── hooks/
-│   └── semantic-model-router/
-│       ├── .codex-plugin/plugin.json
-│       ├── hooks/
-│       └── src/
 ├── skills.json
 ├── AGENTS.md
 └── README.md
