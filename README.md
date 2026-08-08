@@ -21,6 +21,10 @@
 
 使用 Codex App 原生顶层任务建立轻量规划与执行分工。可先运行 `$grill-me` 收敛方案，再显式调用 `$model-delegate` 委派实现；规划任务保留需求、架构、审查和验收职责，执行任务只处理已确认的边界。
 
+#### [ccs-restore-efforts](./ccs-restore-efforts/)
+
+当 CC Switch 同步模型目录或重写 `config.toml` 后，`Effort` 的 `ultra`、`max` 和 `Speed` 的 `Fast` 可能从 Codex 设置中消失。运行 `scripts/restore_efforts.py` 会幂等地给所有现有模型补回推理档位与 `Fast / priority` 速度档位，并恢复丢失的 `model` 行。
+
 ### 媒体生成（media-generation）
 
 #### [custom-image-gen](./custom-image-gen/)

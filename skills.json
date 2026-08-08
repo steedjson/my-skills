@@ -5,6 +5,15 @@
   "repo": "https://github.com/steedjson/my-skills",
   "skills": [
     {
+      "name": "ccs-restore-efforts",
+      "category": "models-and-routing",
+      "description": "Restore ultra/max reasoning efforts and the Fast Speed selector in CC Switch catalog and config.toml",
+      "files": [
+        "SKILL.md",
+        "scripts/restore_efforts.py"
+      ]
+    },
+    {
       "name": "codexradar-model-advisor",
       "category": "models-and-routing",
       "description": "Live CodexRadar measurements and OpenAI Codex model/effort recommendations",
