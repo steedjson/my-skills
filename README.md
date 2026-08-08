@@ -25,7 +25,7 @@
 
 #### [custom-image-gen](./custom-image-gen/)
 
-通过 `auth.json` 和当前 Codex provider 配置解析自定义图片生成端点与凭据，再复用系统 `imagegen` Skill 和 CLI。仅负责 provider 适配，不复制系统图片生成工作流。
+通过 `image_auth.json` 和当前 Codex provider 配置解析自定义图片生成端点与凭据（Key 缺失时回退 `auth.json` 的 `OPENAI_API_KEY`），再复用系统 `imagegen` Skill 和 CLI。仅负责 provider 适配，不复制系统图片生成工作流。
 
 ### 框架工作流（framework-workflows）
 

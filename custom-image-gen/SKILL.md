@@ -1,6 +1,6 @@
 ---
 name: custom-image-gen
-description: Adapt the bundled system Image Gen skill to an OpenAI-compatible custom provider. Resolve CUSTOM_IMAGE_GEN_URL and CUSTOM_IMAGE_GEN_API_KEY from Codex auth.json, fall back to the active config.toml base_url and auth.json OPENAI_API_KEY only when custom values are absent, then run the system imagegen CLI with temporary OPENAI_BASE_URL and OPENAI_API_KEY mappings. Use only when the user explicitly invokes $custom-image-gen or requests system Image Gen through custom Codex credentials or endpoint configuration.
+description: Adapt the bundled system Image Gen skill to an OpenAI-compatible custom provider. Resolve CUSTOM_IMAGE_GEN_URL and CUSTOM_IMAGE_GEN_API_KEY from Codex image_auth.json, fall back to the active config.toml base_url and auth.json OPENAI_API_KEY only when custom values are absent, then run the system imagegen CLI with temporary OPENAI_BASE_URL and OPENAI_API_KEY mappings. Use only when the user explicitly invokes $custom-image-gen or requests system Image Gen through custom Codex credentials or endpoint configuration.
 ---
 
 # Custom Image Gen
@@ -26,13 +26,15 @@ Use `${CODEX_HOME:-$HOME/.codex}` as the configuration directory.
 
 Resolve URL in this order:
 
-1. Nonblank top-level `CUSTOM_IMAGE_GEN_URL` from `auth.json`.
+1. Nonblank top-level `CUSTOM_IMAGE_GEN_URL` from `image_auth.json`.
 2. Active provider `model_providers.<model_provider>.base_url` from `config.toml`.
 
 Resolve Key in this order:
 
-1. Nonblank top-level `CUSTOM_IMAGE_GEN_API_KEY` from `auth.json`.
-2. Nonblank top-level `OPENAI_API_KEY` from the same `auth.json`.
+1. Nonblank top-level `CUSTOM_IMAGE_GEN_API_KEY` from `image_auth.json`; when absent or blank, accept top-level `CUSTOM_IMAGE_GEN_TOKEN` from the same file as an alias.
+2. Nonblank top-level `OPENAI_API_KEY` from `auth.json`.
+
+Read image credentials only from `image_auth.json`; do not read `CUSTOM_IMAGE_GEN_URL` or the custom Key from `auth.json`. `auth.json` only supplies the `OPENAI_API_KEY` fallback.
 
 Do not use existing environment variables, unrelated provider profiles, official defaults, or another host as configuration fallbacks. Never ask the user to paste a Key into chat.
 
@@ -66,7 +68,7 @@ Do not:
 
 Keep the system Image Gen failure workflow, with these provider-specific constraints:
 
-- `401` or `403`: report authentication or permission failure. Try the second auth-file Key once only when it exists and the provider clearly did not create an image.
+- `401` or `403`: report authentication or permission failure. Try the second Key (`OPENAI_API_KEY` from `auth.json`) once only when it exists and the provider clearly did not create an image.
 - `404` or `405`: report likely configured-path incompatibility. Do not append `/v1`, remove `/v1`, or switch hosts automatically.
 - timeout or `5xx`: treat as provider/upstream failure. Do not automatically retry a paid image request or change local configuration.
 - ambiguous completion: do not submit a second paid request.
