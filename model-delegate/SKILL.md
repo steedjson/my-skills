@@ -76,6 +76,7 @@ OPEN_RISKS: 仍需主任务审查的风险
 - 设置清晰标题；
 - 关联当前项目；
 - 写任务使用独立 worktree 或不重叠文件范围；无法隔离时串行执行；
+- 使用临时 worktree 时，必须在任务包 `CONSTRAINTS` 中记录 worktree 路径和分支名，并声明任务完成后需要清理；
 - 将完整任务包放入首条消息。
 
 若创建时只返回 `clientThreadId`，等待任务初始化完成并取得正式 `threadId`。后续通信只使用正式 `threadId`。
@@ -124,12 +125,38 @@ CHECKS: 实际运行的检查及结果
 RISKS: 未验证项和剩余风险
 ```
 
+若执行任务使用了临时 worktree，返回中必须额外包含：
+
+```text
+WORKTREE_PATH: 实际使用的 worktree 路径
+WORKTREE_BRANCH: 对应分支名
+WORKTREE_STATE: 变更是否已应用、合并或保留，以及是否可安全清理
+```
+
 规划任务必须：
 
 1. 等待所有执行任务结束；
 2. 读取每个结果并检查实际文件差异；
 3. 验证关键检查，不能把执行任务声明当作最终证据；
 4. 需要修正时继续向原 `threadId` 派发；
-5. 统一整合、验收并回复用户。
+5. 变更应用或验收后，清理本次委派创建的临时 worktree；
+6. 统一整合、验收并回复用户。
+
+## Worktree 清理
+
+临时 worktree 只用于隔离执行任务，验收完成后默认清理：
+
+1. 清理前确认 `WORKTREE_STATE` 为可安全清理；仍有未保存、未应用或需要用户保留的变更时不得清理。
+2. 只删除本次 `model-delegate` 委派创建的 worktree 路径，不得使用 `git clean -fdx`、强制重置或删除主仓库工作区。
+3. 清理命令按已验证路径执行，例如：
+
+```bash
+git worktree remove <worktree-path>
+git branch -D <worktree-branch>
+```
+
+4. 分支仅在变更已经应用、合并或用户确认删除后删除；否则保留分支并只报告位置。
+5. 清理后运行 `git worktree list` 验证；无法清理时在最终报告中列出路径、分支和原因。
 
 最终报告执行任务 ID、请求模型/effort、完成状态、验证结果和无法确认的事项。
+若使用过 worktree，最终报告必须包含清理结果；未能清理时必须列出剩余 worktree 路径、分支和原因。
