@@ -30,13 +30,13 @@ Codex 生命周期插件。桥接仓库本地 OpenWolf hooks，并在存在 Code
 本仓库 marketplace 源：
 
 ```text
-/Users/changsailong/BDSYNC/self/AI/tools/my-skills
+<repo-root>
 ```
 
 若 `~/.codex/config.toml` 还没有 `vlong-skills-local`，先加：
 
 ```bash
-codex plugin marketplace add /Users/changsailong/BDSYNC/self/AI/tools/my-skills
+codex plugin marketplace add <repo-root>
 ```
 
 ### 2. 安装插件
@@ -151,7 +151,7 @@ codegraph impact SomeSymbol
 ```bash
 cd plugins/openwolf-codegraph-bridge
 node --check hooks/openwolf.mjs
-python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .
+python3 <plugin-creator-root>/scripts/validate_plugin.py .
 ```
 
 ## 更新

@@ -70,14 +70,14 @@ cp -R custom-image-gen/. ~/.claude/skills/custom-image-gen/
 ```bash
 cd plugins/openwolf-codegraph-bridge
 node --check hooks/openwolf.mjs
-python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .
+python3 <plugin-creator-root>/scripts/validate_plugin.py .
 ```
 
 首次本地安装：
 
 ```bash
 # marketplace 源指向本仓库根目录（.agents/plugins/marketplace.json）
-codex plugin marketplace add /Users/changsailong/BDSYNC/self/AI/tools/my-skills
+codex plugin marketplace add <repo-root>
 
 codex plugin add openwolf-codegraph-bridge@vlong-skills-local
 ```

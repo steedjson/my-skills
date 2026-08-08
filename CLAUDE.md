@@ -11,15 +11,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Purpose
 
-`my-skills` is source repo for portable Agent Skills. Each top-level directory containing `SKILL.md` is one distributable skill. Repo name stays `my-skills`; installed Claude Code package name/path stay `vlong` / `~/.claude/skills/vlong/`.
+`my-skills` is source repo for portable Agent Skills. Each top-level directory containing `SKILL.md` is one distributable skill. Skills install per skill (Claude Code: `~/.claude/skills/<skill-name>/`); Codex plugins install via the local marketplace. Registry name is `vlong-skills` (`skills.json`); marketplace name is `vlong-skills-local` (`.agents/plugins/marketplace.json`).
 
 No installer, uninstaller, workflow runtime, or test harness exists in this repo. Do not document or invoke missing commands.
 
 ## Structure
 
-- `skills.json` — skill registry (metadata + `files` list per skill).
-- `<skill-name>/SKILL.md` — required skill definition.
-- `<skill-name>/references/`, `scripts/`, `assets/` — optional skill resources.
+- `skills.json`: repository metadata and public skill registry.
+- `<skill-name>/SKILL.md`: required skill definition.
+- `<skill-name>/references/`, `scripts/`, `assets/`: optional skill resources.
+- `plugins/<plugin-name>/`: installable Codex plugin packages.
+- `.agents/plugins/marketplace.json`: repository plugin marketplace catalog; local plugin paths resolve relative to repository root.
+- `skills.json` `category`: discovery and classification metadata only, never a path resolver.
+- `README.md`: public skill list and usage overview.
 
 ## Commands
 
