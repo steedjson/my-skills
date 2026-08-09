@@ -55,10 +55,10 @@ OPEN_RISKS: 仍需主任务审查的风险
 每个顶层用户任务首次准备委派时，只确认一次执行模型：
 
 1. 若用户已明确给出 `create_thread` 接受的规范模型名和 reasoning effort，直接使用。
-2. 否则先询问是否使用当前可用的推荐低成本模型，并列出最多 3 个可确认能传给 `create_thread` 的替代组合。
-3. 用户必须明确确认模型和 effort；确认只对当前顶层任务有效。
-4. 不修改主任务模型、全局默认模型或用户配置。
-5. 创建执行任务时显式传入已确认的模型和 effort。模型或 effort 被拒绝时返回原始错误并重新请求明确确认，不自动替换。
+2. 用户未指定时，先检查当前运行面 `create_thread` 明确接受的模型和 effort；若同时支持规范模型 `gpt-5.6-luna` 与 `max`，默认使用 `model=gpt-5.6-luna`、`thinking=max`，不再询问模型选择。
+3. 若 `gpt-5.6-luna + max` 不可用，再查看当前推荐组合，列出最多 3 个可传给 `create_thread` 的替代方案，并请求用户明确确认。
+4. 默认组合或推荐组合只对当前顶层任务有效；不修改主任务模型、全局默认模型或用户配置。
+5. 创建执行任务时显式传入已选定的模型和 effort。模型或 effort 被拒绝时返回原始错误；若拒绝的是默认组合，回到推荐方案确认，不自动换成未经确认的模型。
 
 只有用户明确确认委派后才调用 `create_thread`。确认模型和 effort 即视为允许为本次委派创建执行任务。
 
@@ -66,17 +66,51 @@ OPEN_RISKS: 仍需主任务审查的风险
 
 不要从 `send_message_to_thread` 的模型元数据推断 `create_thread` 支持的模型或 effort，也不要根据显示名称猜测。只有 `create_thread` 明确接受过的组合才能作为已确认示例，例如 `model=deepseek-v4-flash-0731 effort=xhigh`。工具只证明请求值时，报告“请求模型/effort”；只有任务元数据明确返回实际值时，才报告“实际模型/effort”。
 
+## 项目工具与技能基线
+
+委派任务应尽量复现主任务的项目工作方式，但不假定执行任务会继承主任务的历史消息、实时 MCP 连接、工具调用结果或已加载上下文。主任务在创建执行任务前，必须记录本次项目基线：
+
+- `PROJECT_RULES`：仓库根目录及相关路径下的 `AGENTS.md`、`.wolf/anatomy.md`、`.wolf/cerebrum.md`、`.wolf/buglog.json` 等适用规则；
+- `CODEGRAPH`：项目是否存在 `.codegraph/`，以及是否要求优先使用 CodeGraph；
+- `OPENWOLF`：OpenWolf 是否生效，以及本次任务需要遵守的 OpenWolf 入口规则；
+- `PROJECT_SKILLS`：本任务相关、主任务已使用或项目明确要求的技能；
+- `CHECKS`：项目已有的测试、类型检查、构建、格式化或校验命令；
+- `TOOL_LIMITS`：工具只读范围、禁止操作和执行环境限制。
+
+任务包必须增加：
+
+```text
+TOOLING_BASELINE:
+  PROJECT_RULES: 适用项目规则及读取顺序
+  CODEGRAPH: required/available/not-applicable，以及使用条件
+  OPENWOLF: required/available/not-applicable，以及使用条件
+  PROJECT_SKILLS: 本任务必须使用的相关技能
+  CHECKS: 主任务要求执行的检查
+  TOOL_LIMITS: 工具、权限和环境限制
+```
+
+执行任务开始时必须：
+
+1. 先读取任务包列出的项目规则，并检查当前 worktree 或项目目录中的对应文件；
+2. 存在 `.codegraph/` 且 `CODEGRAPH` 为 required 或 available 时，按项目规则优先使用 CodeGraph；不存在索引时不得自行创建，报告实际状态；
+3. OpenWolf 生效或任务包标记为 required 时，遵守适用的 OpenWolf 文件和项目规则；
+4. 使用 `PROJECT_SKILLS` 中与任务相关的技能，并按 `CHECKS` 执行验证；
+5. 只使用与本任务相关的工具，不要求无关的全局工具全部参与。
+
+主任务和执行任务不能使用同一实时工具连接时，执行任务必须在报告中说明实际可用性。必需工具、技能或项目规则无法获得时，不得静默替换或声称保持一致；应返回 `TOOLING_GAP`，并在影响安全或验收时返回 `STATUS: BLOCKED`。可选工具缺失但不影响验收时，必须记录缺失和替代依据。
+
 ## 创建执行任务
 
 默认只创建一个执行任务。仅当子任务互相独立且写入范围隔离时才并行创建多个。
 
 调用 `create_thread` 时：
 
-- 使用用户确认的模型和 effort；
+- 使用用户指定或按上述优先级确定的模型和 effort；
 - 设置清晰标题；
 - 关联当前项目；
-- 写任务使用独立 worktree 或不重叠文件范围；无法隔离时串行执行；
-- 使用临时 worktree 时，必须在任务包 `CONSTRAINTS` 中记录 worktree 路径和分支名，并声明任务完成后需要清理；
+- Git 项目默认使用独立 worktree；只有用户明确要求直接使用当前项目目录时，才使用 `local` 环境；
+- 使用独立 worktree 时，任务包必须要求执行任务提交全部预期变更，并返回实际 worktree 路径、分支名和提交 ID；
+- 不使用 worktree 时，必须确保写入范围不重叠；无法隔离时串行执行；
 - 将完整任务包放入首条消息。
 
 若创建时只返回 `clientThreadId`，等待任务初始化完成并取得正式 `threadId`。后续通信只使用正式 `threadId`。
@@ -87,11 +121,14 @@ OPEN_RISKS: 仍需主任务审查的风险
 ROLE: Bounded execution task reporting to the planning task
 SCOPE: 明确目标和允许处理的范围
 INPUTS: 必要上下文、文件和已知事实
+TOOLING_BASELINE: 主任务记录的项目规则、工具、技能和检查基线
 OUTPUT: 预期交付物和报告格式
 ACCEPTANCE: 可执行的验收条件
 FILE_BOUNDARIES: 允许读取或修改的文件范围
 CONSTRAINTS: 权限、安全、兼容性和禁止事项
 ```
+
+使用 worktree 时，任务包的 `CONSTRAINTS` 还必须写明：执行任务不得把未提交修改作为最终交付；完成前必须提交变更、保持 worktree 状态可审查，并返回 `WORKTREE_PATH`、`WORKTREE_BRANCH` 和 `COMMIT_ID`。执行任务不得自行合并到主分支或删除 worktree。
 
 不要把整体架构判断、跨任务协调、权限决策或最终验收交给执行任务。
 
@@ -122,6 +159,10 @@ STATUS: COMPLETE
 RESULT: 完成内容
 FILES: 检查或修改的文件
 CHECKS: 实际运行的检查及结果
+TOOLS_USED: 实际使用的项目工具和关键工具调用
+SKILLS_USED: 实际使用的相关技能
+TOOLING_GAPS: 未获得的工具、技能或规则，以及影响
+BASELINE_MATCH: MATCH/PARTIAL/MISMATCH，并说明依据
 RISKS: 未验证项和剩余风险
 ```
 
@@ -130,7 +171,8 @@ RISKS: 未验证项和剩余风险
 ```text
 WORKTREE_PATH: 实际使用的 worktree 路径
 WORKTREE_BRANCH: 对应分支名
-WORKTREE_STATE: 变更是否已应用、合并或保留，以及是否可安全清理
+COMMIT_ID: 执行任务提交的变更提交 ID
+WORKTREE_STATE: 变更是否已提交、合并或保留，以及是否可安全清理
 ```
 
 规划任务必须：
@@ -138,25 +180,31 @@ WORKTREE_STATE: 变更是否已应用、合并或保留，以及是否可安全�
 1. 等待所有执行任务结束；
 2. 读取每个结果并检查实际文件差异；
 3. 验证关键检查，不能把执行任务声明当作最终证据；
-4. 需要修正时继续向原 `threadId` 派发；
-5. 变更应用或验收后，清理本次委派创建的临时 worktree；
-6. 统一整合、验收并回复用户。
+4. 对照 `TOOLING_BASELINE` 审查 `TOOLS_USED`、`SKILLS_USED`、`TOOLING_GAPS` 和 `BASELINE_MATCH`；必需基线不匹配时不得声明完成；
+5. 确认 worktree 分支、提交 ID 和主仓库路径属于本次委派，且主仓库没有会被覆盖的未提交修改；
+6. 从主仓库当前主分支手动合并执行分支，优先使用 `git merge --no-ff <WORKTREE_BRANCH>`；只有确需单独应用提交时才使用 `git cherry-pick <COMMIT_ID>`；
+7. 解决合并冲突并重新运行关键检查；合并失败或无法验证时不得声明完成；
+8. 只有合并和验收成功后，才清理本次委派创建的 worktree；只有 `git branch -d <WORKTREE_BRANCH>` 能安全确认分支已合并时才删除分支，使用 cherry-pick 后不得强制删除源分支；
+9. 需要修正时继续向原 `threadId` 派发；
+10. 统一整合、验收并回复用户。
+
+若执行任务未提交变更、提交 ID 不存在、worktree 仍有未保存修改，或主仓库存在无法安全处理的未提交修改，规划任务必须先续派要求执行任务整理并提交，或报告 `STATUS: BLOCKED`；不得直接复制文件、强制重置、覆盖主仓库或跳过合并。
 
 ## Worktree 清理
 
-临时 worktree 只用于隔离执行任务，验收完成后默认清理：
+临时 worktree 只用于隔离执行任务。主任务必须完成“审查 -> 合并 -> 验收 -> 清理”完整闭环，不能只报告执行任务完成：
 
-1. 清理前确认 `WORKTREE_STATE` 为可安全清理；仍有未保存、未应用或需要用户保留的变更时不得清理。
+1. 清理前确认变更已合并到主分支，关键检查已通过，且 `WORKTREE_STATE` 为可安全清理；仍有未保存、未应用或需要用户保留的变更时不得清理。
 2. 只删除本次 `model-delegate` 委派创建的 worktree 路径，不得使用 `git clean -fdx`、强制重置或删除主仓库工作区。
 3. 清理命令按已验证路径执行，例如：
 
 ```bash
 git worktree remove <worktree-path>
-git branch -D <worktree-branch>
+git branch -d <worktree-branch>
 ```
 
-4. 分支仅在变更已经应用、合并或用户确认删除后删除；否则保留分支并只报告位置。
+4. 分支仅在 `git branch -d <worktree-branch>` 成功确认变更已合并后删除；否则保留分支并只报告位置。禁止用 `git branch -D` 绕过未合并保护。
 5. 清理后运行 `git worktree list` 验证；无法清理时在最终报告中列出路径、分支和原因。
 
-最终报告执行任务 ID、请求模型/effort、完成状态、验证结果和无法确认的事项。
-若使用过 worktree，最终报告必须包含清理结果；未能清理时必须列出剩余 worktree 路径、分支和原因。
+最终报告必须包含执行任务 ID、请求模型/effort、合并方式、合并提交或结果、完成状态、验证结果和无法确认的事项。
+若使用过 worktree，最终报告必须包含 `WORKTREE_PATH`、`WORKTREE_BRANCH`、合并结果和清理结果；未能合并或清理时必须列出路径、分支和原因，并将状态标记为 `BLOCKED` 或未完成。
