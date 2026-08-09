@@ -292,10 +292,10 @@ def restore_model_line(path: pathlib.Path, model_name: str) -> bool:
             insert_at = index + 1
             break
 
-    lines[insert_at:insert_at] = [
-        f'model = "{model_name}"',
-        'model_reasoning_effort = "high"',
-    ]
+    additions = [f'model = "{model_name}"']
+    if not re.search(r"^model_reasoning_effort\s*=", text, re.MULTILINE):
+        additions.append('model_reasoning_effort = "high"')
+    lines[insert_at:insert_at] = additions
     path.write_text("\n".join(lines) + "\n")
     return True
 
