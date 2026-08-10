@@ -18,7 +18,19 @@ description: 在任意 Django 后端项目中实现、调试、审查或审计�
 
 ## 发现项目
 
-1. 读取工作区 `AGENTS.md`、`CLAUDE.md`、贡献指南和相关目录规则。项目提供 `.wolf`、`.codegraph` 或其他工具时，按其实际规则使用；没有则跳过。索引可用时先用 CodeGraph 做代码定位和影响分析，再用精确搜索或文件阅读补充。
+1. 规范发现（编辑前完成，只读；按任务规模缩放）：
+   - 微任务（错别字、单行、格式）：只读 `AGENTS.md` + 邻近文件。
+   - 中任务（新端点、模型字段、View 逻辑）：代码规范 + 架构规范。
+   - 高风险（迁移、跨应用、认证授权、数据范围）：全部三类 + CodeGraph 影响分析。
+   - 同一会话已执行过发现：复用上下文，不重复跑。
+   - 只读审查/审计：跑架构 + 业务规范，跳过代码规范。
+
+   三类规范检查清单：
+   - 代码规范：`.editorconfig`、`.pre-commit-config.yaml`、`ruff.toml`、`.flake8`、`pyproject.toml [tool.*]`、`setup.cfg`；缺失时用邻近代码风格推断。
+   - 架构规范：`AGENTS.md`、`CLAUDE.md`、`CONTRIBUTING.md`、`docs/architecture*`、`README` 架构段；记录分层、命名和依赖约定。
+   - 业务流程规范：`docs/`、领域模型文档、`AGENTS.md` 业务段、`README` 业务说明、`.wolf/`；记录租户隔离、审批流、数据范围等约束。
+   - 索引可用时先用 CodeGraph 做代码定位和影响分析，再用精确搜索或文件阅读补充。
+   - 缺失任一类规范时标记 `CONVENTION_GAP`，不靠猜；不自动写入 `AGENTS.md` 或任何项目规范文件。
 2. 从 `manage.py`、`pyproject.toml`、`requirements*`、锁文件和已安装应用确认 Django 版本、数据库、任务运行时以及是否使用 DRF、Ninja 或原生 Django。以代码和配置为准，不以目录名称猜测。
 3. 定位项目验证入口：`Makefile`、`tox.ini`、`noxfile.py`、CI 配置、测试配置和附近测试。记录可用的格式化、静态检查、类型检查、Django 检查、迁移检查和测试命令；使用项目声明的 Python 环境。
 4. 沿真实调用链定位相关路由、View、Serializer/Schema、Form、Service 或用例层、Query/Repository、Model、Admin、Task、Signal、Management Command、Settings、直接调用方、下游消费者和测试。缺少某一层时沿用项目现状，不强行新增。
