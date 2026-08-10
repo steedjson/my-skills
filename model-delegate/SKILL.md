@@ -73,13 +73,20 @@ OPEN_RISKS: 仍需主任务审查的风险
 
 - `PROJECT_BASE_ROOT`：原项目主检出目录；worktree 缺少未跟踪工具目录时，只读获取基线的来源；
 - `EXECUTION_ROOT`：执行任务实际写入、测试和 Git 操作的 worktree 或 `local` 项目目录；
-- `PROJECT_RULES`：仓库根目录及相关路径下的 `AGENTS.md`、`.wolf/anatomy.md`、`.wolf/cerebrum.md`、`.wolf/buglog.json` 等适用规则；
-- `CODEGRAPH`：项目是否存在 `.codegraph/`，以及是否要求优先使用 CodeGraph；
-- `OPENWOLF`：OpenWolf 是否生效，以及本次任务需要遵守的 OpenWolf 入口规则；
-- `PROJECT_SKILLS`：本任务相关、主任务已使用或项目明确要求的技能；
+- `PROJECT_RULES`：仓库根目录、相关路径和项目配置声明的适用规则；
+- `PROJECT_TOOLING`：本任务实际相关的 MCP、技能、CLI、钩子、项目规则或其他工具；
 - `CHECKS`：项目已有的测试、类型检查、构建、格式化或校验命令；
-- `TOOL_LIMITS`：工具只读范围、禁止操作和执行环境限制。
-- `POST_MERGE_SYNC`：主任务合并后应完成的 CodeGraph 刷新确认和 OpenWolf 记录入口。
+- `TOOL_LIMITS`：工具只读范围、禁止操作和执行环境限制；
+- `POST_MERGE_ACTIONS`：主任务合并后需要执行的工具刷新、记录、同步或复核动作。
+
+主任务按以下优先级发现和选择工具：
+
+1. 用户明确指定的工具、技能和限制；
+2. 项目 `AGENTS.md`、项目配置、项目内技能和相关目录规则明确要求或推荐的工具；
+3. 当前运行面实际可用的全局工具、技能、CLI 和连接；
+4. 根据任务类型、文件范围、风险和验收条件，只选择有直接作用的工具。
+
+项目规则未声明具体工具时，主任务自动选择与任务相关且当前可用的工具，不逐次要求用户确认。不得因为某个工具在全局可用就默认要求所有执行任务使用，也不得把 CodeGraph、OpenWolf 或其他特定工具写成固定基线。发现它们时，按普通工具条目记录；未发现或与任务无关时不加入任务包。
 
 任务包必须增加：
 
@@ -88,33 +95,42 @@ TOOLING_BASELINE:
   PROJECT_BASE_ROOT: 原项目主检出目录，只读提供未跟踪的工具和规则基线
   EXECUTION_ROOT: 本次实际写入、测试和 Git 操作目录
   PROJECT_RULES: 适用项目规则及读取顺序
-  CODEGRAPH: required/available/not-applicable，以及使用条件
-  OPENWOLF: required/available/not-applicable，以及使用条件
-  PROJECT_SKILLS: 本任务必须使用的相关技能
+  PROJECT_TOOLING:
+    - NAME: 工具或技能名称
+      TYPE: mcp/skill/cli/hook/project-rule/other
+      SOURCE: user/project/runtime
+      REQUIRED: true/false
+      USE_WHEN: 与本任务相关的使用条件
+      ACCESS_ROOT: PROJECT_BASE_ROOT/EXECUTION_ROOT/runtime
+  POST_MERGE_ACTIONS:
+    - NAME: 动作名称
+      TOOL: 对应 PROJECT_TOOLING 条目
+      ACTION: refresh/record/sync/recheck
+      REQUIRED: true/false
+      ENTRYPOINT: 项目或工具明确提供的执行入口
   CHECKS: 主任务要求执行的检查
   TOOL_LIMITS: 工具、权限和环境限制
-  POST_MERGE_SYNC: 主任务在合并后执行的 CodeGraph 和 OpenWolf 收尾规则
 ```
 
 执行任务开始时必须：
 
-1. 先读取 `EXECUTION_ROOT` 中的项目规则；若 worktree 缺少未跟踪的 `.codegraph/`、`.wolf/` 或项目技能目录，改从 `PROJECT_BASE_ROOT` 只读获取相同基线；
-2. `PROJECT_BASE_ROOT` 存在 `.codegraph/` 且 `CODEGRAPH` 为 required 或 available 时，使用 `PROJECT_BASE_ROOT` 作为 CodeGraph 的项目路径进行架构和影响分析；不得因为 worktree 未复制索引而报告 `TOOLING_GAP`；
-3. `PROJECT_BASE_ROOT` 存在 `.wolf/` 且 OpenWolf 生效或任务包标记为 required 时，读取并遵守其适用规则。不得向 `PROJECT_BASE_ROOT` 写入文件、运行会修改其状态的钩子，或把它作为 Git 操作目录；
-4. 任何将修改的源码、测试结果、Git 状态和提交必须以 `EXECUTION_ROOT` 为准。来自 `PROJECT_BASE_ROOT` 的 CodeGraph 或规则内容只用于理解项目约定，不能替代对 worktree 当前文件的检查；
-5. 使用 `PROJECT_SKILLS` 中与任务相关的技能，并按 `CHECKS` 在 `EXECUTION_ROOT` 执行验证；
-6. 只使用与本任务相关的工具，不要求无关的全局工具全部参与。
+1. 先读取 `EXECUTION_ROOT` 中的项目规则和工具声明；若 worktree 缺少未跟踪的项目规则、工具目录、索引或项目技能，改从 `PROJECT_BASE_ROOT` 只读获取相同基线；
+2. 按 `PROJECT_TOOLING` 的 `USE_WHEN` 和 `ACCESS_ROOT` 使用相关工具。工具支持显式项目路径时，可按任务包要求指向 `PROJECT_BASE_ROOT` 获取架构、索引或规则基线，不得因为 worktree 未复制其本地状态而误报缺失；
+3. 不得向 `PROJECT_BASE_ROOT` 写入文件、运行会修改其状态的钩子或命令，或把它作为 Git 操作目录，除非任务包明确授权某项只属于主检出目录的操作；
+4. 任何将修改的源码、测试结果、Git 状态和提交必须以 `EXECUTION_ROOT` 为准。来自 `PROJECT_BASE_ROOT` 的工具结果或规则内容只用于理解项目约定，不能替代对 worktree 当前文件的检查；
+5. 使用 `PROJECT_TOOLING` 中与任务相关的工具和技能，并按 `CHECKS` 在 `EXECUTION_ROOT` 执行验证；
+6. 实际使用前确认工具在执行任务运行面可用；只使用与本任务相关的工具，不要求无关的全局工具全部参与。
 
-主任务和执行任务不能使用同一实时工具连接时，执行任务必须在报告中说明实际可用性。仅当 `PROJECT_BASE_ROOT` 与 `EXECUTION_ROOT` 都无法提供必需工具、技能或项目规则时，才返回 `TOOLING_GAP`；不得因 worktree 缺少未跟踪目录而静默降级或误报缺失。可选工具缺失但不影响验收时，必须记录缺失和替代依据。
+主任务和执行任务不能使用同一实时工具连接时，执行任务必须在报告中说明实际可用性。仅当任务包标记为 `REQUIRED: true` 的工具、技能或项目规则无法通过声明来源获得时，才返回阻塞性 `TOOLING_GAP`；不得因 worktree 缺少未跟踪目录而静默降级或误报缺失。可选工具缺失但不影响验收时，记录缺失、替代方式和不影响验收的依据。
 
-## 主任务合并后同步
+## 主任务合并后工具收尾
 
 执行任务不得把 worktree 工具状态写回主项目。执行分支合并并通过关键检查后，由主任务在 `PROJECT_BASE_ROOT` 完成收尾：
 
-1. 使用 `PROJECT_BASE_ROOT` 重新执行 CodeGraph 架构或影响分析，确认查询针对已合并的主项目内容；工具提示索引尚未同步时，等待其自动更新后重试。不得复制 worktree 的 `.codegraph/`、自行初始化索引或将未合并内容写入主项目索引。
-2. 按 `POST_MERGE_SYNC` 和项目规则运行 OpenWolf 的受支持记录流程。只有项目明确提供的钩子、命令或 `.wolf` 记录约定可以写入；不得猜测格式、伪造记录或把 worktree 的会话状态直接复制到主项目。
-3. OpenWolf 产生记录文件时，主任务必须检查其内容只描述已合并、已验收的变更；按项目规则运行必要检查，并确保记录成为主项目可审查状态的一部分后才报告完成。
-4. 没有受支持的 OpenWolf 记录入口时，主任务在最终报告中写 `OPENWOLF_RECORD: NOT-AVAILABLE` 和实际原因。项目规则要求记录但记录失败时，标记 `STATUS: BLOCKED`；未要求记录时可继续完成，但不得声称已记录。
+1. 只执行 `POST_MERGE_ACTIONS` 中声明且与实际变更相关的动作，例如刷新索引、记录知识、同步元数据或重新执行影响分析；没有声明动作时不虚构收尾义务。
+2. 只使用工具或项目规则明确提供的受支持入口。不得猜测格式、伪造记录、复制 worktree 会话状态，或自行初始化项目未要求的工具。
+3. 工具产生记录或元数据文件时，检查其内容只描述已合并、已验收的变更；按项目规则运行必要检查，并确保结果处于可审查状态后才报告完成。
+4. `REQUIRED: true` 的合并后动作失败时标记 `STATUS: BLOCKED`；可选动作不可用时记录实际原因和影响，不得声称已完成该动作。
 
 ## 创建执行任务
 
@@ -141,7 +157,7 @@ ROLE: Bounded execution task reporting to the planning task
 DELEGATION_KEY: 主任务生成的本次委派唯一标识，所有状态报告必须原样回显
 SCOPE: 明确目标和允许处理的范围
 INPUTS: 必要上下文、文件和已知事实
-TOOLING_BASELINE: 包含 PROJECT_BASE_ROOT、EXECUTION_ROOT、POST_MERGE_SYNC 和主任务记录的项目规则、工具、技能、检查基线
+TOOLING_BASELINE: 包含 PROJECT_BASE_ROOT、EXECUTION_ROOT、POST_MERGE_ACTIONS 和主任务记录的项目规则、工具、技能、检查基线
 OUTPUT: 预期交付物和报告格式
 ACCEPTANCE: 可执行的验收条件
 FILE_BOUNDARIES: 允许读取或修改的文件范围
@@ -202,7 +218,6 @@ RESULT: 完成内容
 FILES: 检查或修改的文件
 CHECKS: 实际运行的检查及结果
 TOOLS_USED: 实际使用的项目工具和关键工具调用
-SKILLS_USED: 实际使用的相关技能
 TOOLING_GAPS: 未获得的工具、技能或规则，以及影响
 BASELINE_MATCH: MATCH/PARTIAL/MISMATCH，并说明依据
 RISKS: 未验证项和剩余风险
@@ -222,11 +237,11 @@ WORKTREE_STATE: 变更是否已提交、合并或保留，以及是否可安全�
 1. 等待所有执行任务结束；
 2. 读取每个结果并检查实际文件差异；
 3. 验证关键检查，不能把执行任务声明当作最终证据；
-4. 对照 `TOOLING_BASELINE` 审查 `TOOLS_USED`、`SKILLS_USED`、`TOOLING_GAPS` 和 `BASELINE_MATCH`；必需基线不匹配时不得声明完成；
+4. 对照 `TOOLING_BASELINE` 审查 `TOOLS_USED`、`TOOLING_GAPS` 和 `BASELINE_MATCH`；必需基线不匹配时不得声明完成；
 5. 确认 worktree 分支、提交 ID 和主仓库路径属于本次委派，且主仓库没有会被覆盖的未提交修改；
 6. 从主仓库当前主分支手动合并执行分支，优先使用 `git merge --no-ff <WORKTREE_BRANCH>`；只有确需单独应用提交时才使用 `git cherry-pick <COMMIT_ID>`；
 7. 解决合并冲突并重新运行关键检查；合并失败或无法验证时不得声明完成；
-8. 按“主任务合并后同步”完成 CodeGraph 刷新确认和 OpenWolf 记录；必需记录失败时不得清理 worktree 或声明完成；
+8. 按“主任务合并后工具收尾”完成 `POST_MERGE_ACTIONS`；必需动作失败时不得清理 worktree 或声明完成；
 9. 只有合并、验收和必需同步成功后，才清理本次委派创建的 worktree；只有 `git branch -d <WORKTREE_BRANCH>` 能安全确认分支已合并时才删除分支，使用 cherry-pick 后不得强制删除源分支；
 10. 需要修正时继续向原 `threadId` 派发；
 11. 统一整合、验收并回复用户。
@@ -249,5 +264,5 @@ git branch -d <worktree-branch>
 4. 分支仅在 `git branch -d <worktree-branch>` 成功确认变更已合并后删除；否则保留分支并只报告位置。禁止用 `git branch -D` 绕过未合并保护。
 5. 清理后运行 `git worktree list` 验证；无法清理时在最终报告中列出路径、分支和原因。
 
-最终报告必须包含执行任务 ID、`DELEGATION_KEY`、已验证的 `clientThreadId -> threadId` 绑定、请求模型/effort、恢复动作、合并方式、合并提交或结果、完成状态、验证结果、`CODEGRAPH_POST_MERGE`、`OPENWOLF_RECORD` 和无法确认的事项。
+最终报告必须包含执行任务 ID、`DELEGATION_KEY`、已验证的 `clientThreadId -> threadId` 绑定、请求模型/effort、恢复动作、合并方式、合并提交或结果、完成状态、验证结果、`POST_MERGE_ACTIONS` 的实际结果和无法确认的事项。
 若使用过 worktree，最终报告必须包含 `WORKTREE_PATH`、`WORKTREE_BRANCH`、合并结果和清理结果；未能合并或清理时必须列出路径、分支和原因，并将状态标记为 `BLOCKED` 或未完成。
