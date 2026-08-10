@@ -19,7 +19,7 @@
 
 #### [model-delegate](./model-delegate/)
 
-使用 Codex App 原生顶层任务建立轻量规划与执行分工。可先运行 `$grill-me` 收敛方案，再显式调用 `$model-delegate` 委派实现；规划任务保留需求、架构、审查和验收职责，执行任务只处理已确认的边界。
+使用 Codex App 原生顶层任务建立轻量规划与执行分工。可先运行 `$grill-me` 收敛方案，再显式调用 `$model-delegate` 委派实现；默认采用静默等待、事件驱动读取、紧凑结果和按风险复验，减少规划任务重复唤醒与上下文消耗。
 
 #### [ccs-restore-efforts](./ccs-restore-efforts/)
 

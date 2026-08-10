@@ -7,6 +7,30 @@ description: 为 Codex 建立轻量双任务分工。适用于先用 grill-me �
 
 使用 Codex App 原生顶层任务协调。当前任务作为规划与审查任务，另建一个可见执行任务。不要使用子智能体协议、独立 `codex exec`、脚本、插件、MCP 编排、共享状态文件或高频轮询。
 
+## 低消耗模式
+
+默认启用低消耗模式。主任务只在“委派前决策、执行任务状态发生实质变化、最终验收”三个阶段推理，不为进度展示、心跳或重复确认唤醒模型。
+
+- 创建任务前一次性完成需求、边界、工具基线和验收条件整理；创建后不重复分析相同上下文。
+- 执行期间进入静默等待。没有新状态、阻塞或完成结果时，不读取任务、不发送消息、不重复调用任务列表。
+- 优先使用一次较长的有界 `wait_threads`。返回值已包含最终消息时直接使用，不再调用 `read_thread` 获取同一内容。
+- `list_threads` 和 `read_thread` 仅用于恢复、身份校验、结果缺失或异常诊断，不用于常规进度检查。
+- 工具支持并行或批量调用时，把互不依赖的状态检查、验证和只读审查合并到一次调用；不要逐个命令唤醒主任务。
+- 执行任务只返回结构化摘要和失败命令的关键错误，不粘贴完整日志、完整 diff 或重复任务包。
+- 主任务按风险复验，不机械重复执行任务的全部检查。执行任务证据完整且变更低风险时，只重跑仓库必需门禁；高风险或证据不足时才扩大检查。
+- 主任务先检查提交元数据、文件边界、状态和摘要；只有发现越界、冲突、敏感变更或行为风险时才展开完整差异。
+
+低消耗模式不能跳过身份验证、未提交变更检查、主仓库保护、提交确认和高风险验收。节省来自减少重复上下文与无效唤醒，不来自降低必要安全边界。
+
+## 阶段性上下文压缩
+
+主任务上下文随对话增长，每次工具返回都会重新进入推理。为控制主任务费用，在不跳过安全边界的前提下压缩上下文：
+
+- 委派前一次性生成紧凑任务包；后续不再重新读取已经确认的方案讨论和早期分析。
+- 委派完成或超时后，主任务只保留 `DELEGATION_RECORD`、结果摘要和验收证据；不重新带入完整任务包或旧进度。
+- 验收阶段只读取提交差异和检查结果，不重复导入执行任务的完整报告。
+- 主任务无法真正删除已产生的历史，但通过避免重复带入和重复推理来减少有效上下文占用。
+
 ## 与 grill-me 联动
 
 `grill-me` 只负责提问、质疑和收敛方案，不负责写代码或创建执行任务。完成 grilling 后，用户显式调用 `$model-delegate`，或明确说“按已确认方案委派执行”，本技能才开始创建执行任务。
@@ -17,6 +41,14 @@ description: 为 Codex 建立轻量双任务分工。适用于先用 grill-me �
 2. 若方案仍有未决选择、范围或验收条件，先回到规划任务补齐，不创建执行任务；
 3. 只把已确认的边界、文件范围、验收条件和约束发送给执行任务；
 4. 主任务不直接落地实现，只负责拆解、委派、等待、审查和验收。
+
+## 主任务集成级小修正
+
+主任务允许完成不改变架构和业务逻辑的小修正，避免为格式或注册信息重新唤醒委派任务：
+
+- 允许：合并冲突解决、路径修正、格式化、注册信息、元数据和明显遗漏补齐。
+- 禁止：改变业务逻辑、架构、数据库迁移、权限、数据范围、公共接口或不可逆操作。
+- 超出允许范围时必须发回原委派任务，主任务不得越界实现。
 
 推荐交接格式：
 
@@ -39,7 +71,7 @@ OPEN_RISKS: 仍需主任务审查的风险
 - 理解需求、拆解边界、决定架构和风险；
 - 选择可独立验收的执行任务；
 - 创建执行任务并保存 `DELEGATION_KEY`、`clientThreadId` 和正式 `threadId` 的可验证绑定；
-- 任务恢复后主动盘点、校验并推进已有执行任务；
+- 仅在任务恢复时盘点、校验并推进已有执行任务；
 - 处理阻塞、审查结果、检查差异和完成最终验收；
 - 向用户提供最终答复。
 
@@ -71,13 +103,13 @@ OPEN_RISKS: 仍需主任务审查的风险
 
 委派任务应尽量复现主任务的项目工作方式，但不假定执行任务会继承主任务的历史消息、实时 MCP 连接、工具调用结果或已加载上下文。主任务在创建执行任务前，必须记录本次项目基线：
 
-- `PROJECT_BASE_ROOT`：原项目主检出目录；worktree 缺少未跟踪工具目录时，只读获取基线的来源；
-- `EXECUTION_ROOT`：执行任务实际写入、测试和 Git 操作的 worktree 或 `local` 项目目录；
+- `PROJECT_ROOT`：主项目检出目录；委派任务直接在其中工作，共享虚拟环境、`.env`、服务和工具；
+- `BASE_COMMIT`：委派前主任务所在分支的最新提交 ID，用于审查时区分委派任务的改动；
 - `PROJECT_RULES`：仓库根目录、相关路径和项目配置声明的适用规则；
 - `PROJECT_TOOLING`：本任务实际相关的 MCP、技能、CLI、钩子、项目规则或其他工具；
 - `CHECKS`：项目已有的测试、类型检查、构建、格式化或校验命令；
 - `TOOL_LIMITS`：工具只读范围、禁止操作和执行环境限制；
-- `POST_MERGE_ACTIONS`：主任务合并后需要执行的工具刷新、记录、同步或复核动作。
+- `POST_COMMIT_ACTIONS`：主任务合并后需要执行的工具刷新、记录、同步或复核动作。
 
 主任务按以下优先级发现和选择工具：
 
@@ -92,8 +124,8 @@ OPEN_RISKS: 仍需主任务审查的风险
 
 ```text
 TOOLING_BASELINE:
-  PROJECT_BASE_ROOT: 原项目主检出目录，只读提供未跟踪的工具和规则基线
-  EXECUTION_ROOT: 本次实际写入、测试和 Git 操作目录
+  PROJECT_ROOT: 主项目检出目录，直接在其中工作
+  BASE_COMMIT: 委派前最新提交 ID
   PROJECT_RULES: 适用项目规则及读取顺序
   PROJECT_TOOLING:
     - NAME: 工具或技能名称
@@ -101,8 +133,7 @@ TOOLING_BASELINE:
       SOURCE: user/project/runtime
       REQUIRED: true/false
       USE_WHEN: 与本任务相关的使用条件
-      ACCESS_ROOT: PROJECT_BASE_ROOT/EXECUTION_ROOT/runtime
-  POST_MERGE_ACTIONS:
+  POST_COMMIT_ACTIONS:
     - NAME: 动作名称
       TOOL: 对应 PROJECT_TOOLING 条目
       ACTION: refresh/record/sync/recheck
@@ -114,39 +145,68 @@ TOOLING_BASELINE:
 
 执行任务开始时必须：
 
-1. 先读取 `EXECUTION_ROOT` 中的项目规则和工具声明；若 worktree 缺少未跟踪的项目规则、工具目录、索引或项目技能，改从 `PROJECT_BASE_ROOT` 只读获取相同基线；
-2. 按 `PROJECT_TOOLING` 的 `USE_WHEN` 和 `ACCESS_ROOT` 使用相关工具。工具支持显式项目路径时，可按任务包要求指向 `PROJECT_BASE_ROOT` 获取架构、索引或规则基线，不得因为 worktree 未复制其本地状态而误报缺失；
-3. 不得向 `PROJECT_BASE_ROOT` 写入文件、运行会修改其状态的钩子或命令，或把它作为 Git 操作目录，除非任务包明确授权某项只属于主检出目录的操作；
-4. 任何将修改的源码、测试结果、Git 状态和提交必须以 `EXECUTION_ROOT` 为准。来自 `PROJECT_BASE_ROOT` 的工具结果或规则内容只用于理解项目约定，不能替代对 worktree 当前文件的检查；
-5. 使用 `PROJECT_TOOLING` 中与任务相关的工具和技能，并按 `CHECKS` 在 `EXECUTION_ROOT` 执行验证；
-6. 实际使用前确认工具在执行任务运行面可用；只使用与本任务相关的工具，不要求无关的全局工具全部参与。
+1. 读取 `PROJECT_ROOT` 中的项目规则和工具声明；直接使用主项目的虚拟环境、`.env`、服务 和工具，无需额外创建或链接环境。
+2. 按 `PROJECT_TOOLING` 的 `USE_WHEN` 使用相关工具；工具和索引在主项目目录中天然可用，不因未复制状态而误报缺失。
+3. 只修改 `FILE_BOUNDARIES` 声明的文件；不得修改无关文件或执行未授权的破坏性操作。
+4. 使用 `PROJECT_TOOLING` 中与任务相关的工具和技能，并按 `CHECKS` 在 `PROJECT_ROOT` 执行验证。
+5. 完成前必须 `git add` 预期文件并 `git commit`，返回 `COMMIT_ID`；不得把未提交修改作为最终交付。
 
-主任务和执行任务不能使用同一实时工具连接时，执行任务必须在报告中说明实际可用性。仅当任务包标记为 `REQUIRED: true` 的工具、技能或项目规则无法通过声明来源获得时，才返回阻塞性 `TOOLING_GAP`；不得因 worktree 缺少未跟踪目录而静默降级或误报缺失。可选工具缺失但不影响验收时，记录缺失、替代方式和不影响验收的依据。
+主任务和执行任务不能使用同一实时工具连接时，执行任务必须在报告中说明实际可用性。仅当任务包标记为 `REQUIRED: true` 的工具、技能或项目规则无法获得时，才返回阻塞性 `TOOLING_GAP`；不得静默降级。可选工具缺失但不影响验收时，记录缺失、替代方式和不影响验收的依据。
 
-## 主任务合并后工具收尾
+## 提交后工具收尾
 
-执行任务不得把 worktree 工具状态写回主项目。执行分支合并并通过关键检查后，由主任务在 `PROJECT_BASE_ROOT` 完成收尾：
+执行任务提交变更并通过关键检查后，由主任务在 `PROJECT_ROOT` 完成收尾：
 
-1. 只执行 `POST_MERGE_ACTIONS` 中声明且与实际变更相关的动作，例如刷新索引、记录知识、同步元数据或重新执行影响分析；没有声明动作时不虚构收尾义务。
+1. 只执行 `POST_COMMIT_ACTIONS` 中声明且与实际变更相关的动作，例如刷新索引、记录知识、同步元数据或重新执行影响分析；没有声明动作时不虚构收尾义务。
 2. 只使用工具或项目规则明确提供的受支持入口。不得猜测格式、伪造记录、复制 worktree 会话状态，或自行初始化项目未要求的工具。
 3. 工具产生记录或元数据文件时，检查其内容只描述已合并、已验收的变更；按项目规则运行必要检查，并确保结果处于可审查状态后才报告完成。
-4. `REQUIRED: true` 的合并后动作失败时标记 `STATUS: BLOCKED`；可选动作不可用时记录实际原因和影响，不得声称已完成该动作。
+4. `REQUIRED: true` 的提交后动作失败时标记 `STATUS: BLOCKED`；可选动作不可用时记录实际原因和影响，不得声称已完成该动作。
 
 ## 创建执行任务
 
-默认只创建一个执行任务。仅当子任务互相独立且写入范围隔离时才并行创建多个。
+### 并发策略
+
+写任务默认串行：主任务等待当前写委派返回 `COMMIT_ID` 后再发下一个，零并发写委派。这是默认行为，不需要显式声明。
+
+只读委派（审计、分析、审查、探查，不修改任何文件）不受串行限制，可与写任务或其他只读任务并发。任务包 `MODE: read-only` 即视为只读委派。
+
+并行写任务为 opt-in 显式模式，需同时满足全部条件：
+
+- 主任务为每个写委派声明互不相交的 `FILE_BOUNDARIES`；
+- 主任务承担分区正确性责任；分区错误导致的冲突由主任务处理；
+- 任何写委派修改 `FILE_BOUNDARIES` 外文件时立即 abort 并 revert；
+- 主任务显式选择 `PARALLEL_WRITE_MODE`，不默认启用。
+
+分区正确性无法保证时使用串行。不确定时使用串行。
 
 调用 `create_thread` 时：
 
 - 使用用户指定或按上述优先级确定的模型和 effort；
 - 设置清晰标题；
 - 关联当前项目；
-- Git 项目默认使用独立 worktree；只有用户明确要求直接使用当前项目目录时，才使用 `local` 环境；
-- 使用独立 worktree 时，任务包必须要求执行任务提交全部预期变更，并返回实际 worktree 路径、分支名和提交 ID；
-- 不使用 worktree 时，必须确保写入范围不重叠；无法隔离时串行执行；
+- 始终使用 `local` 环境，委派任务直接在主项目目录工作，共享虚拟环境、`.env`、服务和工具；不创建 worktree；
+- 委派前必须先 `git pull --ff-only` 拉取远端最新；fast-forward 失败（本地有分叉）时停止并让用户决定，不自动 merge 或 rebase；
+- 随后检查 `git status`；工作区不干净时主任务必须先提交或 stash，确保委派任务从干净状态开始；
+- 任务包必须要求执行任务只修改 `FILE_BOUNDARIES` 声明的文件，完成后 `git add` 并 `git commit`，返回 `COMMIT_ID`；
 - 将完整任务包放入首条消息。
 
-主任务必须为每个执行任务生成唯一、不可复用的 `DELEGATION_KEY`，并在当前规划任务的消息记录中保存以下绑定：`DELEGATION_KEY`、创建响应中的 `clientThreadId`、正式 `threadId`、项目、`EXECUTION_ROOT`、worktree 分支和任务标题。不得用任务标题、模型、创建时间、项目名、最近活动会话或用户可见短 ID 推断正式 `threadId`。
+主任务必须为每个执行任务生成唯一、不可复用的 `DELEGATION_KEY`，并立即保存一个 `DELEGATION_RECORD` 状态块作为唯一可信恢复来源。恢复时逐项验证，禁止按标题或最近活动猜测。
+
+```text
+DELEGATION_RECORD:
+  DELEGATION_KEY: 本次委派唯一标识
+  CLIENT_THREAD_ID: 创建响应返回的 clientThreadId
+  THREAD_ID: 正式 threadId，经运行面映射验证
+  HOST_ID: 任务所在 host
+  PROJECT: 关联项目
+  PROJECT_ROOT: 主项目检出目录
+  BASE_COMMIT: 委派前最新提交 ID
+  COMMIT_ID: 委派任务提交的变更提交 ID，完成后填入
+  CURSOR: 最新 wait_threads 游标，每次等待后更新
+  TASK_TITLE: 任务标题，仅作参考
+```
+
+不得用任务标题、模型、创建时间、项目名、最近活动会话或用户可见短 ID 推断正式 `threadId`。
 
 若创建时只返回 `clientThreadId`，等待与该 `clientThreadId` 对应的任务初始化完成后，才记录正式 `threadId`。只有创建响应、任务列表元数据或运行面明确返回的映射，才能确认 `clientThreadId -> threadId`。后续通信只使用已验证的正式 `threadId`；不得把 `clientThreadId` 当成正式 `threadId` 传入执行工具。
 
@@ -154,41 +214,51 @@ TOOLING_BASELINE:
 
 ```text
 ROLE: Bounded execution task reporting to the planning task
+MODE: read-only | write；read-only 不修改任何文件，可与并发；write 受串行策略约束
 DELEGATION_KEY: 主任务生成的本次委派唯一标识，所有状态报告必须原样回显
 SCOPE: 明确目标和允许处理的范围
 INPUTS: 必要上下文、文件和已知事实
-TOOLING_BASELINE: 包含 PROJECT_BASE_ROOT、EXECUTION_ROOT、POST_MERGE_ACTIONS 和主任务记录的项目规则、工具、技能、检查基线
+TOOLING_BASELINE: 包含 PROJECT_BASE_ROOT、EXECUTION_ROOT、POST_COMMIT_ACTIONS 和主任务记录的项目规则、工具、技能、检查基线
+ENVIRONMENT_BASELINE: 运行时、虚拟环境、依赖、服务、环境变量和验证方式
 OUTPUT: 预期交付物和报告格式
 ACCEPTANCE: 可执行的验收条件
-FILE_BOUNDARIES: 允许读取或修改的文件范围
+FILE_BOUNDARIES: 允许读取的文件范围；write 模式下同时为允许修改范围
 CONSTRAINTS: 权限、安全、兼容性和禁止事项
 ```
 
-使用 worktree 时，任务包的 `CONSTRAINTS` 还必须写明：执行任务不得把未提交修改作为最终交付；完成前必须提交变更、保持 worktree 状态可审查，并返回 `WORKTREE_PATH`、`WORKTREE_BRANCH` 和 `COMMIT_ID`。执行任务不得自行合并到主分支或删除 worktree。
+任务包的 `CONSTRAINTS` 必须写明：执行任务不得把未提交修改作为最终交付；完成前必须 `git add` 预期文件并 `git commit` 到当前分支，返回 `COMMIT_ID`；不得修改 `FILE_BOUNDARIES` 以外的文件。
+`MODE: read-only` 的委派不修改任何文件，不提交、不返回 `COMMIT_ID`，只返回分析或审查结果。
 
 不要把整体架构判断、跨任务协调、权限决策或最终验收交给执行任务。
 
 ## 等待与阻塞反馈
 
-使用一次有界 `wait_threads` 等待状态变化；不要循环读取任务或发送心跳。等待返回完成、需要关注或超时后，再按需使用 `read_thread` 查看结果。
+使用一次较长的有界 `wait_threads` 等待状态变化；不要循环读取任务或发送心跳。
+
+- 返回完成且已包含执行任务最终消息：直接进入验收，不再调用 `read_thread`。
+- 返回需要关注或结构化阻塞：只处理新增事实，并向同一任务发送一次决定。
+- 返回超时但没有新状态：使用原 `threadId`、`hostId` 和最新 `cursor` 自动续接一次；不调用 `read_thread` 重读旧消息，不进行重复审查。第二次仍无变化才暂停，等待用户再次唤醒。
+- 返回结果缺失、身份不一致或工具错误：才使用一次 `read_thread` 或 `list_threads` 做定向诊断。
+
+等待前把已验证的 `threadId`、`hostId` 和最新游标保存在 `DELEGATION_RECORD` 中。后续 `wait_threads` 必须携带 `afterCursor`，避免旧消息重复进入上下文。超时本身不等于失败；但第二次等待仍无变化时，主任务应暂停并记录当前 `DELEGATION_RECORD`，等待用户或运行面再次唤醒后从该游标继续。
 
 ## 暂停后恢复
 
 规划任务在重新启动、恢复上下文或用户要求继续时，必须先恢复已有委派，再开始新委派、重新拆解或向用户报告完成：
 
-1. 从当前规划任务记录读取每个已知 `DELEGATION_KEY`、`clientThreadId` 和正式 `threadId`；可用时使用 `list_threads` 交叉检查任务元数据。
+1. 从 `DELEGATION_RECORD` 读取每个已知委派的 `DELEGATION_KEY`、`CLIENT_THREAD_ID`、`THREAD_ID`、`HOST_ID`、`PROJECT`、`EXECUTION_ROOT`、`WORKTREE_BRANCH`、`COMMIT_ID` 和 `CURSOR`；可用时使用 `list_threads` 交叉检查任务元数据。任何一项无法验证时记录 `THREAD_IDENTITY_GAP`，不得向候选任务发送继续、修改、合并或清理指令。
 2. 只有同时满足以下条件，才视为身份已验证：正式 `threadId` 有运行面返回的创建映射；任务属于同一项目；任务首条消息或状态报告回显相同 `DELEGATION_KEY`；其 `EXECUTION_ROOT`、任务范围与保存的绑定一致。
 3. 不得因标题、分支名、模型、最近活动时间、相同项目或显示顺序相似而选择会话。任何一项无法验证时，记录 `THREAD_IDENTITY_GAP`，不得向候选任务发送继续、修改、合并或清理指令。
 4. 身份已验证且任务未完成时，主任务必须向原正式 `threadId` 发送一次恢复消息，要求先检查当前状态，再从原任务包的安全位置继续。每次恢复周期对同一任务至多发送一次；随后使用一次有界 `wait_threads` 等待新状态，避免重复催促。
 5. 身份已验证且任务返回 `STATUS: BLOCKED` 时，主任务能根据已确认方案自行决定的，立即用同一 `threadId` 发送决定并要求继续；需要用户新决定的，向用户报告该阻塞，不创建替代任务。
-6. 身份已验证且任务已完成时，直接进入审查、合并、验证和主任务收尾，不发送恢复消息。
+6. 身份已验证且任务已完成时，直接进入审查、验证和主任务收尾，不发送恢复消息。
 
 恢复消息格式：
 
 ```text
 DELEGATION_KEY: 原样回显已验证标识
 ACTION: RESUME_ORIGINAL_TASK
-INSTRUCTION: 先检查当前 worktree、分支、未完成步骤和已有检查结果；仅在原任务包范围内继续。
+INSTRUCTION: 先检查当前 Git 状态、未完成步骤和已有检查结果；仅在原任务包范围内继续。
 REPORT: 回显 DELEGATION_KEY、当前状态、已完成项、下一步、阻塞项和实际检查。
 ```
 
@@ -207,6 +277,18 @@ SAFE_NEXT_STEP: 获得决定后可执行的最小下一步
 
 等待本身不需要高频主模型推理；只有工具返回新状态或任务消息后，规划任务才继续处理。超时不等于失败，先读取任务状态再判断。
 
+## 风险矩阵
+
+验收强度按变更类型分级。项目规则可以提高风险等级，但不能降低强制高风险项。
+
+| 等级 | 条件 | 主任务复验范围 |
+|------|------|----------------|
+| 低 | 文档、技能文本、README、展示元数据、局部非运行配置 | 仓库必需门禁 + 目标格式校验 |
+| 中 | 普通代码、测试、内部 API、依赖调整、路由/视图逻辑 | 最小相关测试 + 仓库门禁 |
+| 高 | 数据库迁移、数据修复、认证授权、租户隔离、生产配置、并发、公共接口、不可逆操作 | 完整差异审查 + 相关集成检查 + 仓库门禁 |
+
+执行任务在完成报告中声明风险等级。主任务对照矩阵确认或升级，不降低。
+
 ## 审查与完成
 
 执行任务完成时必须返回：
@@ -216,53 +298,50 @@ STATUS: COMPLETE
 DELEGATION_KEY: 原样回显主任务标识
 RESULT: 完成内容
 FILES: 检查或修改的文件
-CHECKS: 实际运行的检查及结果
+CHECKS: 实际运行的检查及简短结果；失败时只附关键错误
 TOOLS_USED: 实际使用的项目工具和关键工具调用
 TOOLING_GAPS: 未获得的工具、技能或规则，以及影响
 BASELINE_MATCH: MATCH/PARTIAL/MISMATCH，并说明依据
 RISKS: 未验证项和剩余风险
 ```
 
-若执行任务使用了临时 worktree，返回中必须额外包含：
-
-```text
-WORKTREE_PATH: 实际使用的 worktree 路径
-WORKTREE_BRANCH: 对应分支名
-COMMIT_ID: 执行任务提交的变更提交 ID
-WORKTREE_STATE: 变更是否已提交、合并或保留，以及是否可安全清理
-```
+完成报告保持紧凑，通常不超过 40 行。不要附完整命令日志、完整 diff、重复的任务包或逐文件叙述；主任务可从提交按需读取。
 
 规划任务必须：
 
 1. 等待所有执行任务结束；
-2. 读取每个结果并检查实际文件差异；
-3. 验证关键检查，不能把执行任务声明当作最终证据；
-4. 对照 `TOOLING_BASELINE` 审查 `TOOLS_USED`、`TOOLING_GAPS` 和 `BASELINE_MATCH`；必需基线不匹配时不得声明完成；
-5. 确认 worktree 分支、提交 ID 和主仓库路径属于本次委派，且主仓库没有会被覆盖的未提交修改；
-6. 从主仓库当前主分支手动合并执行分支，优先使用 `git merge --no-ff <WORKTREE_BRANCH>`；只有确需单独应用提交时才使用 `git cherry-pick <COMMIT_ID>`；
-7. 解决合并冲突并重新运行关键检查；合并失败或无法验证时不得声明完成；
-8. 按“主任务合并后工具收尾”完成 `POST_MERGE_ACTIONS`；必需动作失败时不得清理 worktree 或声明完成；
-9. 只有合并、验收和必需同步成功后，才清理本次委派创建的 worktree；只有 `git branch -d <WORKTREE_BRANCH>` 能安全确认分支已合并时才删除分支，使用 cherry-pick 后不得强制删除源分支；
-10. 需要修正时继续向原 `threadId` 派发；
-11. 统一整合、验收并回复用户。
+2. 直接使用 `wait_threads` 返回的最终消息；仅在结果不完整或异常时调用 `read_thread`；
+3. 先用一次批量只读检查确认提交存在、worktree 干净、文件未越界、主仓库安全和变更摘要。按风险矩阵决定是否展开完整差异；
+4. 按风险矩阵复验关键检查，不能把执行任务声明当作最终证据；
+5. 对照 `TOOLING_BASELINE` 审查 `TOOLS_USED`、`TOOLING_GAPS` 和 `BASELINE_MATCH`；必需基线不匹配时不得声明完成；
+6. 确认 worktree 分支或提交 ID 和主仓库路径属于本次委派，且主仓库没有会被覆盖的未提交修改；
+7. 合并策略同时支持 branch 和 detached HEAD：
+   - 有分支：`git merge --no-ff <WORKTREE_BRANCH>`；
+   - detached HEAD：验证提交归属后 `git merge --no-ff <COMMIT_ID>`，跳过分支删除；
+   - 只有确需单独应用提交时才使用 `git cherry-pick <COMMIT_ID>`；
+8. 解决合并冲突并重新运行关键检查；允许主任务完成集成级小修正（格式、路径、注册信息），超出范围则发回原委派任务；
+9. 按"主任务合并后工具收尾"完成 `POST_COMMIT_ACTIONS`；必需动作失败时不得清理 worktree 或声明完成；
+10. 只有合并、验收和必需同步成功后，才清理本次委派创建的 worktree；有分支时只有 `git branch -d <WORKTREE_BRANCH>` 成功确认分支已合并才删除分支，detached HEAD 模式跳过分支删除；使用 cherry-pick 后不得强制删除源分支；
+11. 需要修正时继续向原 `threadId` 派发；
+12. 统一整合、验收并回复用户。最终报告按报告策略输出。
 
 若执行任务未提交变更、提交 ID 不存在、worktree 仍有未保存修改，或主仓库存在无法安全处理的未提交修改，规划任务必须先续派要求执行任务整理并提交，或报告 `STATUS: BLOCKED`；不得直接复制文件、强制重置、覆盖主仓库或跳过合并。
 
-## Worktree 清理
+## 报告策略
 
-临时 worktree 只用于隔离执行任务。主任务必须完成“审查 -> 合并 -> 验收 -> 清理”完整闭环，不能只报告执行任务完成：
+成功时只向用户提供简报；失败或阻塞时才展开完整诊断。
 
-1. 清理前确认变更已合并到主分支，关键检查已通过，且 `WORKTREE_STATE` 为可安全清理；仍有未保存、未应用或需要用户保留的变更时不得清理。
-2. 只删除本次 `model-delegate` 委派创建的 worktree 路径，不得使用 `git clean -fdx`、强制重置或删除主仓库工作区。
-3. 清理命令按已验证路径执行，例如：
+### 成功简报
 
-```bash
-git worktree remove <worktree-path>
-git branch -d <worktree-branch>
-```
+- 完成结果一句话。
+- 提交 ID 和关键检查结果。
+- 剩余风险和未验证项。
 
-4. 分支仅在 `git branch -d <worktree-branch>` 成功确认变更已合并后删除；否则保留分支并只报告位置。禁止用 `git branch -D` 绕过未合并保护。
-5. 清理后运行 `git worktree list` 验证；无法清理时在最终报告中列出路径、分支和原因。
+### 失败或阻塞详报
 
-最终报告必须包含执行任务 ID、`DELEGATION_KEY`、已验证的 `clientThreadId -> threadId` 绑定、请求模型/effort、恢复动作、合并方式、合并提交或结果、完成状态、验证结果、`POST_MERGE_ACTIONS` 的实际结果和无法确认的事项。
-若使用过 worktree，最终报告必须包含 `WORKTREE_PATH`、`WORKTREE_BRANCH`、合并结果和清理结果；未能合并或清理时必须列出路径、分支和原因，并将状态标记为 `BLOCKED` 或未完成。
+- `DELEGATION_KEY`、`DELEGATION_RECORD` 关键字段、请求模型/effort。
+- 恢复动作、合并方式、合并提交或结果。
+- 完成状态、验证结果、`POST_COMMIT_ACTIONS` 的实际结果。
+
+- 审查不通过时列出 commit ID、revert 结果和续派状态，并将状态标记为 `BLOCKED` 或未完成。
+- 无法确认的事项。
