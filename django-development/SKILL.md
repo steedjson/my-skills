@@ -31,6 +31,12 @@ description: 在任意 Django 后端项目中实现、调试、审查或审计�
    - 业务流程规范：`docs/`、领域模型文档、`AGENTS.md` 业务段、`README` 业务说明、`.wolf/`；记录租户隔离、审批流、数据范围等约束。
    - 索引可用时先用 CodeGraph 做代码定位和影响分析，再用精确搜索或文件阅读补充。
    - 缺失任一类规范时标记 `CONVENTION_GAP`，不靠猜；不自动写入 `AGENTS.md` 或任何项目规范文件。
+
+   规范缺失处置（按任务风险分级）：
+   - 低/中风险任务（错别字、单行、新端点、模型字段）：标 `CONVENTION_GAP`，用邻近代码风格推断，继续执行，报告里列出缺失项。
+   - 高风险任务（迁移、跨应用、认证授权、数据范围、不可逆操作）：标 `CONVENTION_GAP`，**block**，向用户报告需要哪类规范才能安全继续，用户明确确认"继续"或生成规范后才恢复。
+   - 只读审查/审计：标 `CONVENTION_GAP`，继续，报告缺失不影响只读结论。
+   - 用户明确要求"帮我生成 AGENTS.md 骨架"时才生成；不主动提议生成。
 2. 从 `manage.py`、`pyproject.toml`、`requirements*`、锁文件和已安装应用确认 Django 版本、数据库、任务运行时以及是否使用 DRF、Ninja 或原生 Django。以代码和配置为准，不以目录名称猜测。
 3. 定位项目验证入口：`Makefile`、`tox.ini`、`noxfile.py`、CI 配置、测试配置和附近测试。记录可用的格式化、静态检查、类型检查、Django 检查、迁移检查和测试命令；使用项目声明的 Python 环境。
 4. 沿真实调用链定位相关路由、View、Serializer/Schema、Form、Service 或用例层、Query/Repository、Model、Admin、Task、Signal、Management Command、Settings、直接调用方、下游消费者和测试。缺少某一层时沿用项目现状，不强行新增。
