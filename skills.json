@@ -39,10 +39,9 @@
       ]
     },
     {
-      "name": "django-api-change",
+      "name": "django-development",
       "category": "framework-workflows",
-      "description": "Implement, debug, or review Django API and Service changes in the wework project",
-      "project": "wework",
+      "description": "Discovery-first Django backend workflow for native Django, DRF, and Ninja projects",
       "files": [
         "SKILL.md",
         "agents/openai.yaml"

@@ -33,9 +33,9 @@
 
 ### 框架工作流（framework-workflows）
 
-#### [django-api-change](./django-api-change/) *(project: wework)*
+#### [django-development](./django-development/)
 
-在 wework 项目中实现、调试或审查 Django API 与 Service 变更。涵盖路由、视图、参数 Schema、Service、模型、迁移、权限、租户隔离、事务、软删除、导出和 API 测试场景。遵循 View → Form/Schema → Service → Model 分层约定。
+在任意 Django 后端项目中发现并遵循现有约定，完成实现、调试、审查或审计。覆盖原生 Django、Django REST Framework、Django Ninja，以及 API、Service/用例、模型、迁移、Admin、Form、后台任务、信号、管理命令、设置和测试。
 
 ## Codex 插件
 
@@ -117,7 +117,7 @@ my-skills/
 ├── custom-image-gen/
 │   ├── SKILL.md
 │   └── agents/openai.yaml
-├── django-api-change/
+├── django-development/
 │   ├── SKILL.md
 │   └── agents/openai.yaml
 ├── plugins/

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Django 后端开发"
+  short_description: "发现项目约定并安全交付 Django 后端变更"
+  default_prompt: "使用 $django-development 发现项目约定并实现、验证这项 Django 后端变更。"
