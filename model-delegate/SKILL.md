@@ -30,7 +30,7 @@ CONSTRAINTS: 用户已确认的限制
 OPEN_RISKS: 仍需主任务审查的风险
 ```
 
-先搜索或加载当前运行面提供的任务协调工具。若没有 `create_thread`、`send_message_to_thread`、`wait_threads` 和 `read_thread`，停止并报告不兼容。不得静默改用默认 Agent 或其他执行路径。
+先搜索或加载当前运行面提供的任务协调工具。若没有 `create_thread`、`send_message_to_thread`、`wait_threads` 和 `read_thread`，停止并报告不兼容。恢复已有委派任务时优先使用 `list_threads`；若该工具不可用，只能使用已验证的正式 `threadId`，不得猜测候选会话。不得静默改用默认 Agent 或其他执行路径。
 
 ## 职责
 
@@ -38,7 +38,8 @@ OPEN_RISKS: 仍需主任务审查的风险
 
 - 理解需求、拆解边界、决定架构和风险；
 - 选择可独立验收的执行任务；
-- 创建执行任务并保存正式 `threadId`；
+- 创建执行任务并保存 `DELEGATION_KEY`、`clientThreadId` 和正式 `threadId` 的可验证绑定；
+- 任务恢复后主动盘点、校验并推进已有执行任务；
 - 处理阻塞、审查结果、检查差异和完成最终验收；
 - 向用户提供最终答复。
 
@@ -129,12 +130,15 @@ TOOLING_BASELINE:
 - 不使用 worktree 时，必须确保写入范围不重叠；无法隔离时串行执行；
 - 将完整任务包放入首条消息。
 
-若创建时只返回 `clientThreadId`，等待任务初始化完成并取得正式 `threadId`。后续通信只使用正式 `threadId`。
+主任务必须为每个执行任务生成唯一、不可复用的 `DELEGATION_KEY`，并在当前规划任务的消息记录中保存以下绑定：`DELEGATION_KEY`、创建响应中的 `clientThreadId`、正式 `threadId`、项目、`EXECUTION_ROOT`、worktree 分支和任务标题。不得用任务标题、模型、创建时间、项目名、最近活动会话或用户可见短 ID 推断正式 `threadId`。
+
+若创建时只返回 `clientThreadId`，等待与该 `clientThreadId` 对应的任务初始化完成后，才记录正式 `threadId`。只有创建响应、任务列表元数据或运行面明确返回的映射，才能确认 `clientThreadId -> threadId`。后续通信只使用已验证的正式 `threadId`；不得把 `clientThreadId` 当成正式 `threadId` 传入执行工具。
 
 任务包必须包含：
 
 ```text
 ROLE: Bounded execution task reporting to the planning task
+DELEGATION_KEY: 主任务生成的本次委派唯一标识，所有状态报告必须原样回显
 SCOPE: 明确目标和允许处理的范围
 INPUTS: 必要上下文、文件和已知事实
 TOOLING_BASELINE: 包含 PROJECT_BASE_ROOT、EXECUTION_ROOT、POST_MERGE_SYNC 和主任务记录的项目规则、工具、技能、检查基线
@@ -152,9 +156,30 @@ CONSTRAINTS: 权限、安全、兼容性和禁止事项
 
 使用一次有界 `wait_threads` 等待状态变化；不要循环读取任务或发送心跳。等待返回完成、需要关注或超时后，再按需使用 `read_thread` 查看结果。
 
+## 暂停后恢复
+
+规划任务在重新启动、恢复上下文或用户要求继续时，必须先恢复已有委派，再开始新委派、重新拆解或向用户报告完成：
+
+1. 从当前规划任务记录读取每个已知 `DELEGATION_KEY`、`clientThreadId` 和正式 `threadId`；可用时使用 `list_threads` 交叉检查任务元数据。
+2. 只有同时满足以下条件，才视为身份已验证：正式 `threadId` 有运行面返回的创建映射；任务属于同一项目；任务首条消息或状态报告回显相同 `DELEGATION_KEY`；其 `EXECUTION_ROOT`、任务范围与保存的绑定一致。
+3. 不得因标题、分支名、模型、最近活动时间、相同项目或显示顺序相似而选择会话。任何一项无法验证时，记录 `THREAD_IDENTITY_GAP`，不得向候选任务发送继续、修改、合并或清理指令。
+4. 身份已验证且任务未完成时，主任务必须向原正式 `threadId` 发送一次恢复消息，要求先检查当前状态，再从原任务包的安全位置继续。每次恢复周期对同一任务至多发送一次；随后使用一次有界 `wait_threads` 等待新状态，避免重复催促。
+5. 身份已验证且任务返回 `STATUS: BLOCKED` 时，主任务能根据已确认方案自行决定的，立即用同一 `threadId` 发送决定并要求继续；需要用户新决定的，向用户报告该阻塞，不创建替代任务。
+6. 身份已验证且任务已完成时，直接进入审查、合并、验证和主任务收尾，不发送恢复消息。
+
+恢复消息格式：
+
+```text
+DELEGATION_KEY: 原样回显已验证标识
+ACTION: RESUME_ORIGINAL_TASK
+INSTRUCTION: 先检查当前 worktree、分支、未完成步骤和已有检查结果；仅在原任务包范围内继续。
+REPORT: 回显 DELEGATION_KEY、当前状态、已完成项、下一步、阻塞项和实际检查。
+```
+
 执行任务遇到无法自行安全解决的问题时，结束当前回合并返回：
 
 ```text
+DELEGATION_KEY: 原样回显主任务标识
 STATUS: BLOCKED
 BLOCKER: 阻塞事实
 EVIDENCE: 已检查内容和实际错误
@@ -162,7 +187,7 @@ DECISION_NEEDED: 需要规划任务决定的问题
 SAFE_NEXT_STEP: 获得决定后可执行的最小下一步
 ```
 
-规划任务读取阻塞报告，完成必要判断，再用 `send_message_to_thread` 向同一 `threadId` 发送决定或修正任务。续派默认不传 model 或 thinking，保持原执行任务设置不变。不要新建替代执行任务，除非原任务已不可恢复或需要隔离的新范围。
+规划任务读取身份已验证的阻塞报告，完成必要判断，再用 `send_message_to_thread` 向同一 `threadId` 发送决定或修正任务。续派默认不传 model 或 thinking，保持原执行任务设置不变。不要新建替代执行任务，除非原任务已不可恢复或需要隔离的新范围。
 
 等待本身不需要高频主模型推理；只有工具返回新状态或任务消息后，规划任务才继续处理。超时不等于失败，先读取任务状态再判断。
 
@@ -172,6 +197,7 @@ SAFE_NEXT_STEP: 获得决定后可执行的最小下一步
 
 ```text
 STATUS: COMPLETE
+DELEGATION_KEY: 原样回显主任务标识
 RESULT: 完成内容
 FILES: 检查或修改的文件
 CHECKS: 实际运行的检查及结果
@@ -223,5 +249,5 @@ git branch -d <worktree-branch>
 4. 分支仅在 `git branch -d <worktree-branch>` 成功确认变更已合并后删除；否则保留分支并只报告位置。禁止用 `git branch -D` 绕过未合并保护。
 5. 清理后运行 `git worktree list` 验证；无法清理时在最终报告中列出路径、分支和原因。
 
-最终报告必须包含执行任务 ID、请求模型/effort、合并方式、合并提交或结果、完成状态、验证结果、`CODEGRAPH_POST_MERGE`、`OPENWOLF_RECORD` 和无法确认的事项。
+最终报告必须包含执行任务 ID、`DELEGATION_KEY`、已验证的 `clientThreadId -> threadId` 绑定、请求模型/effort、恢复动作、合并方式、合并提交或结果、完成状态、验证结果、`CODEGRAPH_POST_MERGE`、`OPENWOLF_RECORD` 和无法确认的事项。
 若使用过 worktree，最终报告必须包含 `WORKTREE_PATH`、`WORKTREE_BRANCH`、合并结果和清理结果；未能合并或清理时必须列出路径、分支和原因，并将状态标记为 `BLOCKED` 或未完成。
