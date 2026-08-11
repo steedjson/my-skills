@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Restore reasoning efforts and the Fast speed tier in Codex CC Switch metadata.
+"""Restore model capabilities in Codex CC Switch metadata.
 
 Idempotent: adds missing max/ultra reasoning tiers in their required order and the Fast/priority speed
-tier without removing any existing model capability metadata.
+tier, and restores vendor-verified context windows without removing unrelated metadata.
 """
 
 import json
@@ -42,12 +42,61 @@ EFFORT_FIELD = {
 }
 SPEED_TIER_KEYS = ("serviceTiers", "service_tiers")
 SPEED_LEGACY_KEYS = ("additionalSpeedTiers", "additional_speed_tiers")
+CONTEXT_WINDOW_KEYS = (
+    "context_window",
+    "contextWindow",
+    "max_context_window",
+    "maxContextWindow",
+)
 FAST_TIER_TOML = (
     'additionalSpeedTiers = ["fast"], '
     'additional_speed_tiers = ["fast"], '
     'serviceTiers = [{ id = "priority", name = "Fast", description = "1.5x speed, increased usage" }], '
     'service_tiers = [{ id = "priority", name = "Fast", description = "1.5x speed, increased usage" }]'
 )
+
+# Vendor documentation verified 2026-08-11. Unknown route aliases are never inferred.
+MODEL_CONTEXT_WINDOWS = {
+    "deepseek-v4-flash": 1_000_000,
+    "deepseek-v4-pro": 1_000_000,
+    "glm-5.2": 1_000_000,
+    "gpt-5.4": 1_050_000,
+    "gpt-5.4-mini": 400_000,
+    "gpt-5.5": 1_050_000,
+    "gpt-5.6": 1_050_000,
+    "gpt-5.6-luna": 1_050_000,
+    "gpt-5.6-sol": 1_050_000,
+    "gpt-5.6-terra": 1_050_000,
+    "grok-4.5": 500_000,
+}
+VERIFIED_MODEL_ALIASES = {
+    "deepseek-v4-flash-0731": "deepseek-v4-flash",
+}
+
+
+def model_name(model: dict) -> str:
+    """Return the route model identifier used by the verified specification map."""
+    return model.get("model") or model.get("id") or model.get("slug") or ""
+
+
+def verified_context_window(name: str) -> int | None:
+    """Return a vendor-verified context window, resolving only explicit aliases."""
+    canonical_name = VERIFIED_MODEL_ALIASES.get(name, name)
+    return MODEL_CONTEXT_WINDOWS.get(canonical_name)
+
+
+def patch_context_metadata(model: dict) -> bool:
+    """Restore all supported context-window field spellings for a verified model."""
+    context_window = verified_context_window(model_name(model))
+    if context_window is None:
+        return False
+
+    changed = False
+    for key in CONTEXT_WINDOW_KEYS:
+        if model.get(key) != context_window:
+            model[key] = context_window
+            changed = True
+    return changed
 
 
 def patch_model_metadata(model: dict) -> tuple[bool, bool]:
@@ -108,24 +157,30 @@ def patch_model_metadata(model: dict) -> tuple[bool, bool]:
     return effort_changed, speed_changed
 
 
-def patch_catalog(path: pathlib.Path) -> tuple[int, int]:
-    """Patch all models in the JSON catalog. Returns reasoning/speed model counts."""
+def patch_catalog(path: pathlib.Path) -> tuple[int, int, int, set[str]]:
+    """Patch catalog models and return capability counts plus unverified routes."""
     data = json.loads(path.read_text())
     models = data if isinstance(data, list) else data.get("models", [])
     effort_models = 0
     speed_models = 0
+    context_models = 0
+    unverified_models: set[str] = set()
 
     for model in models:
         effort_changed, speed_changed = patch_model_metadata(model)
         effort_models += int(effort_changed)
         speed_models += int(speed_changed)
+        context_models += int(patch_context_metadata(model))
+        name = model_name(model)
+        if name and verified_context_window(name) is None:
+            unverified_models.add(name)
 
-    if effort_models or speed_models:
+    if effort_models or speed_models or context_models:
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
-    return effort_models, speed_models
+    return effort_models, speed_models, context_models, unverified_models
 
 
-def patch_config(path: pathlib.Path) -> tuple[int, int, int]:
+def patch_config(path: pathlib.Path) -> tuple[int, int, int, int, set[str]]:
     """Patch inline provider models in config.toml without rewriting credentials."""
     text = path.read_text()
 
@@ -175,15 +230,24 @@ def patch_config(path: pathlib.Path) -> tuple[int, int, int]:
         speed_count += count
         text = text.replace(old, new)
 
-    text, missing_speed_count = add_missing_speed_fields(text)
+    text, missing_speed_count, context_count, unverified_models = patch_inline_models(text)
     speed_count += missing_speed_count
 
-    if level_count or effort_count or snake_effort_count or reordered_count or speed_count:
+    if (
+        level_count
+        or effort_count
+        or snake_effort_count
+        or reordered_count
+        or speed_count
+        or context_count
+    ):
         path.write_text(text)
     return (
         level_count + effort_count + snake_effort_count + reordered_count,
         speed_count,
         level_count,
+        context_count,
+        unverified_models,
     )
 
 
@@ -200,22 +264,64 @@ def normalize_inline_effort_order(text: str) -> tuple[str, int]:
     return text, reordered
 
 
-def add_missing_speed_fields(text: str) -> tuple[str, int]:
-    """Add Speed metadata when route models omit the capability fields entirely."""
+def patch_inline_models(text: str) -> tuple[str, int, int, set[str]]:
+    """Patch Speed and verified context metadata in the inline provider models."""
     lines = text.splitlines(keepends=True)
     for line_index, line in enumerate(lines):
         if not line.startswith("models = ["):
             continue
 
-        updated, count = patch_models_line(line)
-        if count:
+        updated, speed_count, context_count, unverified_models = patch_models_line(line)
+        if speed_count or context_count:
             lines[line_index] = updated
-        return "".join(lines), count
+        return "".join(lines), speed_count, context_count, unverified_models
 
-    return text, 0
+    return text, 0, 0, set()
 
 
-def patch_models_line(line: str) -> tuple[str, int]:
+def inline_model_name(table: str) -> str:
+    """Extract a model identifier from one TOML inline table."""
+    for key in ("model", "id", "slug"):
+        match = re.search(rf'\b{key}\s*=\s*"([^"]+)"', table)
+        if match:
+            return match.group(1)
+    return ""
+
+
+def patch_inline_model_table(table: str) -> tuple[str, bool, bool, str | None]:
+    """Patch one TOML inline model table without reserializing unrelated values."""
+    speed_changed = False
+    context_changed = False
+    name = inline_model_name(table)
+    context_window = verified_context_window(name)
+
+    if not any(key in table for key in (*SPEED_LEGACY_KEYS, *SPEED_TIER_KEYS)):
+        table = table[:-1] + ", " + FAST_TIER_TOML + " }"
+        speed_changed = True
+
+    if context_window is None:
+        return table, speed_changed, context_changed, name or None
+
+    missing_context_keys = []
+    for key in CONTEXT_WINDOW_KEYS:
+        pattern = re.compile(rf"(\b{key}\s*=\s*)(\d+)")
+        match = pattern.search(table)
+        if not match:
+            missing_context_keys.append(key)
+            continue
+        if int(match.group(2)) != context_window:
+            table = pattern.sub(rf"\g<1>{context_window}", table, count=1)
+            context_changed = True
+
+    if missing_context_keys:
+        additions = ", ".join(f"{key} = {context_window}" for key in missing_context_keys)
+        table = table[:-1] + ", " + additions + " }"
+        context_changed = True
+
+    return table, speed_changed, context_changed, None
+
+
+def patch_models_line(line: str) -> tuple[str, int, int, set[str]]:
     """Patch top-level TOML inline tables within the provider's models array."""
     segments: list[str] = []
     cursor = 0
@@ -224,7 +330,9 @@ def patch_models_line(line: str) -> tuple[str, int]:
     table_depth = 0
     quote: str | None = None
     escaped = False
-    patched = 0
+    speed_patched = 0
+    context_patched = 0
+    unverified_models: set[str] = set()
 
     for index, character in enumerate(line):
         if quote:
@@ -258,17 +366,21 @@ def patch_models_line(line: str) -> tuple[str, int]:
             continue
 
         table = line[table_start : index + 1]
-        if not any(key in table for key in (*SPEED_LEGACY_KEYS, *SPEED_TIER_KEYS)):
-            segments.append(line[cursor:index])
-            segments.append(", " + FAST_TIER_TOML + " }")
+        updated, speed_changed, context_changed, unverified_name = patch_inline_model_table(table)
+        if speed_changed or context_changed:
+            segments.append(line[cursor:table_start])
+            segments.append(updated)
             cursor = index + 1
-            patched += 1
+        speed_patched += int(speed_changed)
+        context_patched += int(context_changed)
+        if unverified_name:
+            unverified_models.add(unverified_name)
         table_start = None
 
-    if not patched:
-        return line, 0
+    if not speed_patched and not context_patched:
+        return line, 0, 0, unverified_models
     segments.append(line[cursor:])
-    return "".join(segments), patched
+    return "".join(segments), speed_patched, context_patched, unverified_models
 
 
 def check_model_line(path: pathlib.Path) -> str | None:
@@ -320,19 +432,27 @@ def main() -> int:
         print(f"config not found: {CONFIG}", file=sys.stderr)
         return 1
 
-    catalog_efforts, catalog_speed = patch_catalog(CATALOG)
+    catalog_efforts, catalog_speed, catalog_context, catalog_unverified = patch_catalog(CATALOG)
     print(
         "catalog: "
         f"{catalog_efforts} model(s) reasoning patched, "
-        f"{catalog_speed} model(s) Fast speed patched"
+        f"{catalog_speed} model(s) Fast speed patched, "
+        f"{catalog_context} model(s) context window patched"
     )
 
-    config_efforts, config_speed, config_levels = patch_config(CONFIG)
+    config_efforts, config_speed, config_levels, config_context, config_unverified = patch_config(CONFIG)
     print(
         "config.toml: "
         f"{config_efforts} reasoning arrays and "
-        f"{config_speed} Fast speed fields patched"
+        f"{config_speed} Fast speed fields and "
+        f"{config_context} context window model(s) patched"
     )
+    unverified_models = sorted(catalog_unverified | config_unverified)
+    if unverified_models:
+        print(
+            "unverified model aliases preserved: " + ", ".join(unverified_models),
+            file=sys.stderr,
+        )
 
     model_name = check_model_line(CONFIG)
     if model_name:
@@ -349,8 +469,15 @@ def main() -> int:
         print(f"config.toml: TOML validation FAILED: {error}", file=sys.stderr)
         return 1
 
-    if not (catalog_efforts or catalog_speed or config_efforts or config_speed):
-        print("no changes needed: reasoning tiers and Fast speed are already present")
+    if not (
+        catalog_efforts
+        or catalog_speed
+        or catalog_context
+        or config_efforts
+        or config_speed
+        or config_context
+    ):
+        print("no changes needed: capabilities and verified context windows are already present")
     else:
         print("done: fully quit and reopen Codex to load the restored options")
 

@@ -1,6 +1,6 @@
 ---
 name: ccs-restore-efforts
-description: Restore missing reasoning effort tiers and the Fast Speed selector in the Codex CC Switch model catalog and config.toml. Keeps Max immediately before Ultra. Use when ultra, max, or Speed/Fast disappear after a CC Switch sync or config rewrite.
+description: Restore missing reasoning tiers, Fast Speed, and vendor-verified context windows in the Codex CC Switch model catalog and config.toml. Use when model capabilities disappear or context limits regress after a CC Switch sync or config rewrite.
 ---
 
 # Restore Reasoning Efforts And Speed
@@ -29,10 +29,33 @@ the `Speed` row is hidden even when a previous Codex session showed it.
    `config.toml`, including models where the Speed fields are absent rather
    than merely empty.
 4. Restores a missing top-level `model = "..."` setting.
-5. Parses `config.toml` afterward to verify it is valid TOML.
+5. Restores context-window fields from a vendor-verified static map.
+6. Parses `config.toml` afterward to verify it is valid TOML.
 
 Existing tiers are preserved. The script never deletes models or replaces
 provider credentials.
+
+## Context Window Sources
+
+Values were verified against vendor documentation on August 11, 2026:
+
+| Models | Context window | Primary source |
+| --- | ---: | --- |
+| GPT-5.6, Sol, Terra, Luna | 1,050,000 | OpenAI model documentation |
+| GPT-5.5, GPT-5.4 | 1,050,000 | OpenAI model documentation |
+| GPT-5.4 mini | 400,000 | OpenAI model documentation |
+| DeepSeek V4 Flash, V4 Pro | 1,000,000 | DeepSeek API documentation |
+| Grok 4.5 | 500,000 | xAI model documentation |
+| GLM-5.2 | 1,000,000 | Z.AI model documentation |
+
+The script updates `context_window`, `contextWindow`, `max_context_window`,
+and `maxContextWindow` in both metadata locations.
+
+For a new or unknown model, search the model vendor's official documentation
+before changing the static map. Use primary vendor sources only. Resolve route
+aliases to their real upstream model using explicit provider evidence; never
+infer context capacity from a similar name. Preserve and report unverified
+models instead of overwriting their existing limits.
 
 ## Run
 
@@ -52,5 +75,7 @@ the restored levels and `Speed` should show `Standard` plus `Fast`.
 
 - The UI option declares a `priority` tier; whether an upstream provider
   honors that tier remains provider-specific.
+- Local context metadata controls Codex compaction behavior but cannot increase
+  an upstream provider or proxy's actual request limit.
 - Writing to `~/.codex/` can require elevated permission in a sandboxed
   Codex task.
