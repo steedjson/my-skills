@@ -55,11 +55,14 @@ FAST_TIER_TOML = (
     'service_tiers = [{ id = "priority", name = "Fast", description = "1.5x speed, increased usage" }]'
 )
 
-# Vendor documentation verified 2026-08-11. Unknown route aliases are never inferred.
+# Vendor documentation verified 2026-08-12. Unknown route aliases are never inferred.
 MODEL_CONTEXT_WINDOWS = {
+    "codex-auto-review": 1_050_000,
     "deepseek-v4-flash": 1_000_000,
     "deepseek-v4-pro": 1_000_000,
     "glm-5.2": 1_000_000,
+    "gpt-5.2": 400_000,
+    "gpt-5.3-codex-spark": 128_000,
     "gpt-5.4": 1_050_000,
     "gpt-5.4-mini": 400_000,
     "gpt-5.5": 1_050_000,
@@ -70,9 +73,19 @@ MODEL_CONTEXT_WINDOWS = {
     "grok-4.5": 500_000,
 }
 VERIFIED_MODEL_ALIASES = {
+    "codex-auto-review-csap-oai": "codex-auto-review",
     "deepseek-v4-flash-0731": "deepseek-v4-flash",
+    "gpt-5.3-codex-spark-csap-oai": "gpt-5.3-codex-spark",
+    "gpt-5.4-csap-oai": "gpt-5.4",
+    "gpt-5.4-mini-csap-oai": "gpt-5.4-mini",
+    "gpt-5.5-csap-oai": "gpt-5.5",
+    "gpt-5.6-luna-csap-oai": "gpt-5.6-luna",
+    "gpt-5.6-sol-csap-oai": "gpt-5.6-sol",
+    "gpt-5.6-terra-csap-oai": "gpt-5.6-terra",
 }
-MODEL_ID_KEYS = ("model", "id", "slug", "upstreamModel", "upstream_model")
+ROUTE_ID_KEYS = ("model", "id", "slug")
+UPSTREAM_ID_KEYS = ("upstreamModel", "upstream_model", "display_name", "displayName")
+MODEL_ID_KEYS = ROUTE_ID_KEYS + UPSTREAM_ID_KEYS
 PREFERRED_DEFAULT_MODELS = (
     "gpt-5.6-sol",
     "gpt-5.6-terra",
@@ -83,27 +96,76 @@ PREFERRED_DEFAULT_MODELS = (
 )
 REVIEW_ONLY_MODELS = {
     "codex-auto-review",
+    "codex-auto-review-csap-oai",
 }
 
 
-def model_name(model: dict) -> str:
-    """Return the first explicit route/upstream model identifier."""
+def unique_names(*groups: list[str] | tuple[str, ...]) -> list[str]:
+    """Return first-seen non-empty identity strings."""
+    names: list[str] = []
+    for group in groups:
+        for value in group:
+            if isinstance(value, str) and value and value not in names:
+                names.append(value)
+    return names
+
+
+def identity_candidates(model: dict) -> list[str]:
+    """Collect explicit route and upstream identities without guessing."""
+    names: list[str] = []
     for key in MODEL_ID_KEYS:
+        value = model.get(key)
+        if isinstance(value, str) and value and value not in names:
+            names.append(value)
+    return names
+
+
+def model_name(model: dict) -> str:
+    """Return the primary route identity, falling back to upstream identity."""
+    candidates = identity_candidates(model)
+    return candidates[0] if candidates else ""
+
+
+def route_model_name(model: dict) -> str:
+    """Return the route identity used by the model picker and top-level model line."""
+    for key in ROUTE_ID_KEYS:
         value = model.get(key)
         if isinstance(value, str) and value:
             return value
-    return ""
+    return model_name(model)
 
 
-def verified_context_window(name: str) -> int | None:
-    """Return a vendor-verified context window, resolving only explicit aliases."""
-    canonical_name = VERIFIED_MODEL_ALIASES.get(name, name)
-    return MODEL_CONTEXT_WINDOWS.get(canonical_name)
+def verified_context_window(name: str | list[str] | tuple[str, ...] | None) -> int | None:
+    """Return a vendor-verified context window from explicit names or aliases."""
+    if name is None:
+        return None
+    candidates = [name] if isinstance(name, str) else list(name)
+    for candidate in unique_names(candidates):
+        current = candidate
+        seen: set[str] = set()
+        while current and current not in seen:
+            seen.add(current)
+            if current in MODEL_CONTEXT_WINDOWS:
+                return MODEL_CONTEXT_WINDOWS[current]
+            current = VERIFIED_MODEL_ALIASES.get(current, "")
+    return None
+
+
+def is_review_only_name(name: str) -> bool:
+    """Return True when a route or alias is review-only."""
+    current = name
+    seen: set[str] = set()
+    while current and current not in seen:
+        if current in REVIEW_ONLY_MODELS:
+            return True
+        seen.add(current)
+        current = VERIFIED_MODEL_ALIASES.get(current, "")
+    return False
 
 
 def patch_context_metadata(model: dict) -> bool:
     """Restore all supported context-window field spellings for a verified model."""
-    context_window = verified_context_window(model_name(model))
+    context_window = verified_context_window(identity_candidates(model))
     if context_window is None:
         return False
 
@@ -184,8 +246,9 @@ def patch_catalog(path: pathlib.Path) -> tuple[int, int, int, set[str]]:
         effort_models += int(effort_changed)
         speed_models += int(speed_changed)
         context_models += int(patch_context_metadata(model))
-        name = model_name(model)
-        if name and verified_context_window(name) is None:
+        candidates = identity_candidates(model)
+        name = candidates[0] if candidates else ""
+        if name and verified_context_window(candidates) is None:
             unverified_models.add(name)
 
     if effort_models or speed_models or context_models:
@@ -288,21 +351,32 @@ def patch_inline_models(text: str) -> tuple[str, int, int, set[str]]:
     return text, 0, 0, set()
 
 
-def inline_model_name(table: str) -> str:
-    """Extract a model identifier from one TOML inline table."""
+def inline_identity_candidates(table: str) -> list[str]:
+    """Extract explicit route and upstream identities from one TOML inline table."""
+    names: list[str] = []
     for key in MODEL_ID_KEYS:
         match = re.search(rf'\b{key}\s*=\s*"([^"]+)"', table)
-        if match:
-            return match.group(1)
-    return ""
+        if not match:
+            continue
+        value = match.group(1)
+        if value and value not in names:
+            names.append(value)
+    return names
+
+
+def inline_model_name(table: str) -> str:
+    """Extract the primary model identifier from one TOML inline table."""
+    candidates = inline_identity_candidates(table)
+    return candidates[0] if candidates else ""
 
 
 def patch_inline_model_table(table: str) -> tuple[str, bool, bool, str | None]:
     """Patch one TOML inline model table without reserializing unrelated values."""
     speed_changed = False
     context_changed = False
-    name = inline_model_name(table)
-    context_window = verified_context_window(name)
+    candidates = inline_identity_candidates(table)
+    name = candidates[0] if candidates else ""
+    context_window = verified_context_window(candidates)
 
     if not any(key in table for key in (*SPEED_LEGACY_KEYS, *SPEED_TIER_KEYS)):
         table = table[:-1] + ", " + FAST_TIER_TOML + " }"
@@ -425,31 +499,34 @@ def find_default_model(path: pathlib.Path) -> str:
     """Find a safe top-level default model without promoting review-only routes."""
     data = json.loads(path.read_text())
     models = data if isinstance(data, list) else data.get("models", [])
-    names = []
-    marked_defaults = []
+    catalog_entries: list[tuple[str, list[str], bool]] = []
     for model in models:
-        name = model_name(model)
-        if not name:
+        candidates = identity_candidates(model)
+        route_name = route_model_name(model)
+        if not route_name:
             continue
-        names.append(name)
-        if model.get("isDefault"):
-            marked_defaults.append(name)
+        catalog_entries.append((route_name, candidates, bool(model.get("isDefault"))))
 
-    for name in marked_defaults:
-        if name not in REVIEW_ONLY_MODELS:
-            return name
+    for route_name, candidates, is_default in catalog_entries:
+        if is_default and not any(is_review_only_name(name) for name in [route_name, *candidates]):
+            return route_name
 
     for preferred in PREFERRED_DEFAULT_MODELS:
-        if preferred in names:
-            return preferred
+        for route_name, candidates, _is_default in catalog_entries:
+            if preferred == route_name or preferred in candidates:
+                return route_name
+            if any(VERIFIED_MODEL_ALIASES.get(name) == preferred for name in [route_name, *candidates]):
+                return route_name
 
-    for name in names:
-        if name not in REVIEW_ONLY_MODELS and verified_context_window(name) is not None:
-            return name
+    for route_name, candidates, _is_default in catalog_entries:
+        if any(is_review_only_name(name) for name in [route_name, *candidates]):
+            continue
+        if verified_context_window(candidates) is not None:
+            return route_name
 
-    for name in names:
-        if name not in REVIEW_ONLY_MODELS:
-            return name
+    for route_name, candidates, _is_default in catalog_entries:
+        if not any(is_review_only_name(name) for name in [route_name, *candidates]):
+            return route_name
 
     return PREFERRED_DEFAULT_MODELS[0]
 

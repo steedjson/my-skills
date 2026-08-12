@@ -38,13 +38,15 @@ provider credentials.
 
 ## Context Window Sources
 
-Values were verified against vendor documentation on August 11, 2026:
+Values were verified against vendor documentation on August 12, 2026:
 
 | Models | Context window | Primary source |
 | --- | ---: | --- |
 | GPT-5.6, Sol, Terra, Luna | 1,050,000 | OpenAI model documentation |
 | GPT-5.5, GPT-5.4 | 1,050,000 | OpenAI model documentation |
-| GPT-5.4 mini | 400,000 | OpenAI model documentation |
+| GPT-5.4 mini, GPT-5.2 | 400,000 | OpenAI model documentation |
+| GPT-5.3 Codex Spark | 128,000 | OpenAI model documentation |
+| Codex Auto Review | 1,050,000 | OpenAI model documentation |
 | DeepSeek V4 Flash, V4 Pro | 1,000,000 | DeepSeek API documentation |
 | Grok 4.5 | 500,000 | xAI model documentation |
 | GLM-5.2 | 1,000,000 | Z.AI model documentation |
@@ -52,11 +54,18 @@ Values were verified against vendor documentation on August 11, 2026:
 The script updates `context_window`, `contextWindow`, `max_context_window`,
 and `maxContextWindow` in both metadata locations.
 
-CCSwitchMulti may add `upstreamModel` or `upstream_model` beside the route
-`model`/`id`/`slug`. The script accepts all five explicit identity fields,
-while preferring the route identity and using upstream identity only when no
-route field exists. This keeps renamed provider routes repairable without
-guessing aliases.
+CCSwitchMulti may publish route names such as `gpt-5.6-luna-csap-oai` while
+also storing the real model in `upstreamModel` / `upstream_model` and display
+fields. The script inspects all explicit identity fields and uses the first
+verified match:
+
+1. route `model` / `id` / `slug`
+2. `upstreamModel` / `upstream_model`
+3. `display_name` / `displayName`
+4. explicit alias map entries such as `-csap-oai` and `deepseek-v4-flash-0731`
+
+This keeps renamed provider routes repairable without guessing aliases from a
+similar name.
 
 For a new or unknown model, search the model vendor's official documentation
 before changing the static map. Use primary vendor sources only. Resolve route
