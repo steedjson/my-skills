@@ -72,11 +72,27 @@ MODEL_CONTEXT_WINDOWS = {
 VERIFIED_MODEL_ALIASES = {
     "deepseek-v4-flash-0731": "deepseek-v4-flash",
 }
+MODEL_ID_KEYS = ("model", "id", "slug", "upstreamModel", "upstream_model")
+PREFERRED_DEFAULT_MODELS = (
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-5.6",
+    "gpt-5.5",
+    "gpt-5.4",
+)
+REVIEW_ONLY_MODELS = {
+    "codex-auto-review",
+}
 
 
 def model_name(model: dict) -> str:
-    """Return the route model identifier used by the verified specification map."""
-    return model.get("model") or model.get("id") or model.get("slug") or ""
+    """Return the first explicit route/upstream model identifier."""
+    for key in MODEL_ID_KEYS:
+        value = model.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return ""
 
 
 def verified_context_window(name: str) -> int | None:
@@ -117,23 +133,20 @@ def patch_model_metadata(model: dict) -> tuple[bool, bool]:
 
         # Max must always appear immediately before the final Ultra option.
         max_options = [
-            option
-            for option in options
-            if isinstance(option, dict) and option.get(effort_field) == "max"
+            option for option in options if isinstance(option, dict) and option.get(effort_field) == "max"
         ]
         ultra_options = [
-            option
-            for option in options
-            if isinstance(option, dict) and option.get(effort_field) == "ultra"
+            option for option in options if isinstance(option, dict) and option.get(effort_field) == "ultra"
         ]
-        ordered_options = [
-            option
-            for option in options
-            if not (
-                isinstance(option, dict)
-                and option.get(effort_field) in {"max", "ultra"}
-            )
-        ] + max_options + ultra_options
+        ordered_options = (
+            [
+                option
+                for option in options
+                if not (isinstance(option, dict) and option.get(effort_field) in {"max", "ultra"})
+            ]
+            + max_options
+            + ultra_options
+        )
         if options != ordered_options:
             options[:] = ordered_options
             effort_changed = True
@@ -193,7 +206,9 @@ def patch_config(path: pathlib.Path) -> tuple[int, int, int, int, set[str]]:
     level_count = text.count(old_level)
     text = text.replace(old_level, new_level)
 
-    old_effort = '{ reasoningEffort = "xhigh", description = "Extra high reasoning depth for complex problems" }]'
+    old_effort = (
+        '{ reasoningEffort = "xhigh", description = "Extra high reasoning depth for complex problems" }]'
+    )
     new_effort = (
         '{ reasoningEffort = "xhigh", description = "Extra high reasoning depth for complex problems" }, '
         '{ reasoningEffort = "max", description = "' + MAX_DESC + '" }, '
@@ -202,7 +217,9 @@ def patch_config(path: pathlib.Path) -> tuple[int, int, int, int, set[str]]:
     effort_count = text.count(old_effort)
     text = text.replace(old_effort, new_effort)
 
-    old_snake_effort = '{ reasoning_effort = "xhigh", description = "Extra high reasoning depth for complex problems" }]'
+    old_snake_effort = (
+        '{ reasoning_effort = "xhigh", description = "Extra high reasoning depth for complex problems" }]'
+    )
     new_snake_effort = (
         '{ reasoning_effort = "xhigh", description = "Extra high reasoning depth for complex problems" }, '
         '{ reasoning_effort = "max", description = "' + MAX_DESC + '" }, '
@@ -233,14 +250,7 @@ def patch_config(path: pathlib.Path) -> tuple[int, int, int, int, set[str]]:
     text, missing_speed_count, context_count, unverified_models = patch_inline_models(text)
     speed_count += missing_speed_count
 
-    if (
-        level_count
-        or effort_count
-        or snake_effort_count
-        or reordered_count
-        or speed_count
-        or context_count
-    ):
+    if level_count or effort_count or snake_effort_count or reordered_count or speed_count or context_count:
         path.write_text(text)
     return (
         level_count + effort_count + snake_effort_count + reordered_count,
@@ -256,8 +266,7 @@ def normalize_inline_effort_order(text: str) -> tuple[str, int]:
     reordered = 0
     for field in ("effort", "reasoningEffort", "reasoning_effort"):
         pattern = re.compile(
-            rf'(\{{\s*{field}\s*=\s*"ultra"[^}}]*\}})(\s*,\s*)'
-            rf'(\{{\s*{field}\s*=\s*"max"[^}}]*\}})'
+            rf'(\{{\s*{field}\s*=\s*"ultra"[^}}]*\}})(\s*,\s*)' rf'(\{{\s*{field}\s*=\s*"max"[^}}]*\}})'
         )
         text, count = pattern.subn(r"\3\2\1", text)
         reordered += count
@@ -281,7 +290,7 @@ def patch_inline_models(text: str) -> tuple[str, int, int, set[str]]:
 
 def inline_model_name(table: str) -> str:
     """Extract a model identifier from one TOML inline table."""
-    for key in ("model", "id", "slug"):
+    for key in MODEL_ID_KEYS:
         match = re.search(rf'\b{key}\s*=\s*"([^"]+)"', table)
         if match:
             return match.group(1)
@@ -413,15 +422,36 @@ def restore_model_line(path: pathlib.Path, model_name: str) -> bool:
 
 
 def find_default_model(path: pathlib.Path) -> str:
-    """Find the catalog default model, falling back to the first one."""
+    """Find a safe top-level default model without promoting review-only routes."""
     data = json.loads(path.read_text())
     models = data if isinstance(data, list) else data.get("models", [])
+    names = []
+    marked_defaults = []
     for model in models:
+        name = model_name(model)
+        if not name:
+            continue
+        names.append(name)
         if model.get("isDefault"):
-            return model.get("model") or model.get("id", "")
-    for model in models:
-        return model.get("model") or model.get("id", "")
-    return "gpt-5.6-sol"
+            marked_defaults.append(name)
+
+    for name in marked_defaults:
+        if name not in REVIEW_ONLY_MODELS:
+            return name
+
+    for preferred in PREFERRED_DEFAULT_MODELS:
+        if preferred in names:
+            return preferred
+
+    for name in names:
+        if name not in REVIEW_ONLY_MODELS and verified_context_window(name) is not None:
+            return name
+
+    for name in names:
+        if name not in REVIEW_ONLY_MODELS:
+            return name
+
+    return PREFERRED_DEFAULT_MODELS[0]
 
 
 def main() -> int:

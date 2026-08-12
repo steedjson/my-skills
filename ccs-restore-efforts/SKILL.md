@@ -28,7 +28,8 @@ the `Speed` row is hidden even when a previous Codex session showed it.
 3. Applies the same capability repair to the inline route-provider models in
    `config.toml`, including models where the Speed fields are absent rather
    than merely empty.
-4. Restores a missing top-level `model = "..."` setting.
+4. Restores a missing top-level `model = "..."` setting, preferring a usable
+   chat model over review-only catalog defaults such as `codex-auto-review`.
 5. Restores context-window fields from a vendor-verified static map.
 6. Parses `config.toml` afterward to verify it is valid TOML.
 
@@ -50,6 +51,12 @@ Values were verified against vendor documentation on August 11, 2026:
 
 The script updates `context_window`, `contextWindow`, `max_context_window`,
 and `maxContextWindow` in both metadata locations.
+
+CCSwitchMulti may add `upstreamModel` or `upstream_model` beside the route
+`model`/`id`/`slug`. The script accepts all five explicit identity fields,
+while preferring the route identity and using upstream identity only when no
+route field exists. This keeps renamed provider routes repairable without
+guessing aliases.
 
 For a new or unknown model, search the model vendor's official documentation
 before changing the static map. Use primary vendor sources only. Resolve route
