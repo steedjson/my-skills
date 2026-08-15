@@ -23,7 +23,7 @@
 
 #### [ccs-restore-efforts](./ccs-restore-efforts/)
 
-当 CC Switch 同步模型目录或重写 `config.toml` 后，`Effort` 的 `ultra`、`max` 和 `Speed` 的 `Fast` 可能从 Codex 设置中消失。运行 `scripts/restore_efforts.py` 会幂等地给所有现有模型补回推理档位与 `Fast / priority` 速度档位，并恢复丢失的 `model` 行。
+当 CC Switch 同步模型目录或重写 `config.toml` 后，模型依赖的 `Effort` 和 `Speed` 元数据可能回归。运行 `scripts/restore_efforts.py restore-ui` 会按 Codex Auto Review、DeepSeek V4、Grok 4.5/4.6 与 GPT-5.6/5.5/5.4/5.4-mini/5.2 官方档位、上下文和输出上限收敛，并给其他模型补回通用推理档位、`Fast / priority` 速度档位及丢失的 `model` 行。
 
 ### 媒体生成（media-generation）
 
