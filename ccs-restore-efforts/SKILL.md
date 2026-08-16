@@ -14,6 +14,9 @@ for it:
 
 - `supportedReasoningEfforts` controls the `Effort` choices.
 - `serviceTiers` controls the `Speed` choices.
+- CCSwitchMulti `v3.19.1-31` additionally stores verified provider reasoning
+  capability under `reasoning`, including `supportedEfforts`, `defaultEffort`,
+  `disableAllowed`, and upstream effort mappings.
 
 The `Fast` option is the `priority` service tier. If `serviceTiers` is empty,
 the `Speed` row is hidden even when a previous Codex session showed it.
@@ -31,15 +34,19 @@ Restore UI capability metadata only:
    `none, low, medium, high, xhigh, max`; GPT-5.5 / GPT-5.4 / GPT-5.2 expose
    `none, low, medium, high, xhigh` only. Their defaults are respectively
    `medium`, `medium`, `none`, and `none`.
-2. Adds the legacy `fast` flag and the `Fast` / `priority` service tier to
+2. Restores v3.19.1-31 nested `reasoning` capability metadata for verified
+   models. DeepSeek V4 maps Codex `medium` to provider `high` and exposes
+   `low, high, max`; Grok 4.5/4.6 use the provider's
+   `reasoning.effort` object parameter.
+3. Adds the legacy `fast` flag and the `Fast` / `priority` service tier to
    every existing catalog model.
-3. Applies the same capability repair to the inline route-provider models in
+4. Applies the same capability repair to the inline route-provider models in
    `config.toml`, including models where the Speed fields are absent rather
    than merely empty.
-4. Restores a missing top-level `model = "..."` setting, preferring a usable
+5. Restores a missing top-level `model = "..."` setting, preferring a usable
    chat model over review-only catalog defaults such as `codex-auto-review`.
-5. Restores context-window fields from a vendor-verified static map.
-6. Parses `config.toml` afterward to verify it is valid TOML.
+6. Restores context-window fields from a vendor-verified static map.
+7. Parses `config.toml` afterward to verify it is valid TOML.
 
 For the four published GPT families, unsupported `max` / `ultra` entries are
 removed so repeated runs converge to the documented model-dependent set.
@@ -89,9 +96,9 @@ Both default to `high`. The GPT-5.6 alias is treated as GPT-5.6 Sol for capabili
 `reasoning.effort` and is not changed by this skill. Grok entries are not
 changed by the GPT capability policy.
 
-DeepSeek V4 Flash and V4 Pro expose `off, non-think, low, high, max`.
-Their default is left unchanged unless explicitly present in the source
-metadata.
+DeepSeek V4 Flash and V4 Pro expose provider modes `off, non-think, low, high,
+max`; the v3.19.1-31 Codex capability declaration exposes `low, high, max`,
+maps Codex `medium` to provider `high`, and defaults to `high`.
 
 GPT-5.4 mini exposes `low, medium, high, xhigh`, defaults to `none`, and has
 a maximum output limit of `128,000` tokens. The script updates both

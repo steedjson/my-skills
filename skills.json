@@ -10,7 +10,8 @@
       "description": "Restore model-dependent reasoning efforts, verified context windows, and Fast Speed metadata for Codex models in CC Switch catalog and config.toml",
       "files": [
         "SKILL.md",
-        "scripts/restore_efforts.py"
+        "scripts/restore_efforts.py",
+        "tests/test_restore_efforts.py"
       ]
     },
     {

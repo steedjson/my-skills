@@ -58,6 +58,8 @@ MODEL_EFFORT_POLICIES = {
 }
 MODEL_DEFAULT_EFFORTS = {
     "codex-auto-review": "medium",
+    "deepseek-v4-flash": "high",
+    "deepseek-v4-pro": "high",
     "grok-4.5": "high",
     "grok-4.6": "high",
     "gpt-5.2": "none",
@@ -68,6 +70,44 @@ MODEL_DEFAULT_EFFORTS = {
     "gpt-5.6-luna": "max",
     "gpt-5.6-sol": "medium",
     "gpt-5.6-terra": "xhigh",
+}
+REASONING_CAPABILITY_POLICIES = {
+    "deepseek-v4-flash": {
+        "supportedEfforts": ("low", "high", "max"),
+        "upstream": {
+            "format": "string",
+            "parameter": "reasoning_effort",
+            "effortMap": {
+                "low": "low",
+                "medium": "high",
+                "high": "high",
+                "xhigh": "max",
+                "max": "max",
+            },
+        },
+    },
+    "deepseek-v4-pro": {
+        "supportedEfforts": ("low", "high", "max"),
+        "upstream": {
+            "format": "string",
+            "parameter": "reasoning_effort",
+            "effortMap": {
+                "low": "low",
+                "medium": "high",
+                "high": "high",
+                "xhigh": "max",
+                "max": "max",
+            },
+        },
+    },
+    "grok-4.5": {
+        "supportedEfforts": ("low", "medium", "high"),
+        "upstream": {"format": "reasoning_object", "parameter": "reasoning.effort"},
+    },
+    "grok-4.6": {
+        "supportedEfforts": ("low", "medium", "high", "xhigh"),
+        "upstream": {"format": "reasoning_object", "parameter": "reasoning.effort"},
+    },
 }
 DEFAULT_EFFORT_KEYS = (
     "default_reasoning_effort",
@@ -375,12 +415,167 @@ def model_effort_policy(names: list[str] | tuple[str, ...]) -> tuple[tuple[str, 
         while current and current not in seen:
             seen.add(current)
             if current in MODEL_EFFORT_POLICIES:
-                return MODEL_EFFORT_POLICIES[current], MODEL_DEFAULT_EFFORTS[current]
+                return MODEL_EFFORT_POLICIES[current], MODEL_DEFAULT_EFFORTS.get(current)
             nxt = normalize_model_alias(current)
             if not nxt or nxt == current:
                 break
             current = nxt
     return None, None
+
+
+def reasoning_capability_policy(
+    names: list[str] | tuple[str, ...],
+    expected: tuple[str, ...] | None,
+    default_effort: str | None,
+) -> dict | None:
+    """Return explicit v3.19.1-31 reasoning metadata for a verified model."""
+    for name in unique_names(names):
+        current = name
+        seen: set[str] = set()
+        while current and current not in seen:
+            seen.add(current)
+            policy = REASONING_CAPABILITY_POLICIES.get(current)
+            if policy:
+                return policy
+            nxt = normalize_model_alias(current)
+            if not nxt or nxt == current:
+                break
+            current = nxt
+    if expected is None:
+        return None
+    supported = tuple(effort for effort in expected if effort not in {"off", "non-think"})
+    return {
+        "supportedEfforts": supported,
+        "defaultEffort": default_effort,
+        "upstream": {
+            "format": "string",
+            "parameter": "reasoning_effort",
+            "effortMap": {effort: effort for effort in supported},
+        },
+    }
+
+
+def patch_reasoning_capability(
+    model: dict,
+    names: list[str],
+    expected: tuple[str, ...] | None,
+    default_effort: str | None,
+) -> bool:
+    """Restore v3.19.1-31 nested reasoning capability metadata."""
+    policy = reasoning_capability_policy(names, expected, default_effort)
+    if policy is None:
+        return False
+
+    capability = model.get("reasoning")
+    if not isinstance(capability, dict):
+        capability = {}
+        model["reasoning"] = capability
+        changed = True
+    else:
+        changed = False
+
+    supported = list(policy["supportedEfforts"])
+    if capability.get("supported") is not True:
+        capability["supported"] = True
+        changed = True
+    if capability.get("supportedEfforts") != supported:
+        capability["supportedEfforts"] = supported
+        changed = True
+    target_default = policy.get("defaultEffort", default_effort)
+    if target_default and capability.get("defaultEffort") != target_default:
+        capability["defaultEffort"] = target_default
+        changed = True
+    disable_allowed = "none" in supported
+    if capability.get("disableAllowed") != disable_allowed:
+        capability["disableAllowed"] = disable_allowed
+        changed = True
+
+    upstream_policy = policy["upstream"]
+    upstream = capability.get("upstream")
+    if not isinstance(upstream, dict):
+        upstream = {}
+        capability["upstream"] = upstream
+        changed = True
+    for key, value in upstream_policy.items():
+        normalized = dict(value) if isinstance(value, dict) else value
+        if upstream.get(key) != normalized:
+            upstream[key] = normalized
+            changed = True
+    return changed
+
+
+def _inline_brace_end(text: str, start: int) -> int | None:
+    """Find the closing brace for an inline TOML table."""
+    depth = 0
+    quote: str | None = None
+    escaped = False
+    for index in range(start, len(text)):
+        character = text[index]
+        if quote:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            continue
+        if character in ('"', "'"):
+            quote = character
+        elif character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
+def render_reasoning_capability(policy: dict, default_effort: str | None) -> str:
+    """Render a v3.19.1-31 capability as a TOML inline table."""
+    def toml_string(value: str) -> str:
+        return json.dumps(value, ensure_ascii=False)
+
+    supported = list(policy["supportedEfforts"])
+    target_default = policy.get("defaultEffort", default_effort)
+    upstream = policy["upstream"]
+    effort_map = upstream.get("effortMap", {})
+    rendered_map = ", ".join(f"{key} = {toml_string(value)}" for key, value in effort_map.items())
+    default = f", defaultEffort = {toml_string(target_default)}" if target_default else ""
+    return (
+        "reasoning = { "
+        "supported = true, "
+        f"supportedEfforts = [{', '.join(toml_string(value) for value in supported)}]"
+        f"{default}, "
+        f"disableAllowed = {str('none' in supported).lower()}, "
+        "upstream = { "
+        f"format = {toml_string(upstream['format'])}, "
+        f"parameter = {toml_string(upstream['parameter'])}"
+        f"{', effortMap = { ' + rendered_map + ' }' if rendered_map else ''}"
+        " } }"
+    )
+
+
+def patch_inline_reasoning_capability(
+    table: str,
+    names: list[str],
+    expected: tuple[str, ...] | None,
+    default_effort: str | None,
+) -> tuple[str, bool]:
+    """Insert or replace nested reasoning metadata in one TOML inline model."""
+    policy = reasoning_capability_policy(names, expected, default_effort)
+    if policy is None:
+        return table, False
+    rendered = render_reasoning_capability(policy, default_effort)
+    marker = re.search(r"\breasoning\s*=\s*\{", table)
+    if marker:
+        brace_start = table.find("{", marker.start())
+        brace_end = _inline_brace_end(table, brace_start)
+        if brace_end is None:
+            return table, False
+        replacement = table[: marker.start()] + rendered + table[brace_end + 1 :]
+        return replacement, replacement != table
+    insertion = ", " + rendered
+    return table[:-1] + insertion + " }", True
 
 
 def effort_description(field: str, effort: str) -> str:
@@ -528,7 +723,9 @@ def patch_model_metadata(model: dict) -> tuple[bool, bool]:
     effort_changed = False
     speed_changed = False
 
-    expected_efforts, default_effort = model_effort_policy(identity_candidates(model))
+    names = identity_candidates(model)
+    expected_efforts, default_effort = model_effort_policy(names)
+    effort_changed |= patch_reasoning_capability(model, names, expected_efforts, default_effort)
     for key in EFFORT_KEYS:
         options = model.get(key)
         if not isinstance(options, list):
@@ -710,6 +907,13 @@ def patch_inline_model_table(table: str) -> tuple[str, bool, bool, bool, str | N
     candidates = inline_identity_candidates(table)
     name = candidates[0] if candidates else ""
     expected_efforts, default_effort = model_effort_policy(candidates)
+    table, reasoning_changed = patch_inline_reasoning_capability(
+        table,
+        candidates,
+        expected_efforts,
+        default_effort,
+    )
+    effort_changed |= reasoning_changed
 
     for key in EFFORT_KEYS:
         table, changed = patch_inline_effort_field(table, key, EFFORT_FIELD[key], expected_efforts)
