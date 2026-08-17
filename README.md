@@ -21,6 +21,8 @@
 
 使用 Codex App 原生顶层任务建立低上下文成本分工。默认 `HANDOFF` 单向交接：新任务直接完成工作，旧主任务不等待、不轮询、不验收；`COST_FIRST` 使用不超过 20 行的最短充分任务包和不超过 12 行的报告。任务包强制区分 `READ_ONLY` 与 `WRITE`；委派前必须明确确认模型、effort 和软预算风险。
 
+固定回归用例：`python3 model-delegate/scripts/validate_contract.py`。输出当前上下文体积、估算 token 节省量、相对历史基线降幅、capsule/报告行数和父任务验收上限；不产生模型费用。估算只覆盖静态文本，不等同真实 usage 或账单。
+
 #### [ccs-restore-efforts](./ccs-restore-efforts/)
 
 当 CC Switch 同步模型目录或重写 `config.toml` 后，模型依赖的 `Effort` 和 `Speed` 元数据可能回归。运行 `scripts/restore_efforts.py restore-ui` 会按 Codex Auto Review、DeepSeek V4、Grok 4.5/4.6 与 GPT-5.6/5.5/5.4/5.4-mini/5.2 官方档位、上下文和输出上限收敛，并给其他模型补回通用推理档位、`Fast / priority` 速度档位及丢失的 `model` 行。
@@ -114,7 +116,8 @@ my-skills/
 │   └── SKILL.md
 ├── model-delegate/
 │   ├── SKILL.md
-│   └── references/compact-coordinator.md
+│   ├── references/compact-coordinator.md
+│   └── scripts/validate_contract.py
 ├── custom-image-gen/
 │   ├── SKILL.md
 │   └── agents/openai.yaml

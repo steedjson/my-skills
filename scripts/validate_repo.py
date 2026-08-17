@@ -2,6 +2,7 @@
 """Offline stdlib-only consistency validator for the my-skills repo."""
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -83,15 +84,31 @@ def check_paths(repo):
     return errors
 
 
+def check_skill_contracts(repo):
+    errors = []
+    for script in sorted(repo.glob("*/scripts/validate_contract.py")):
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=repo,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+            detail = result.stderr.strip() or result.stdout.strip() or "unknown failure"
+            errors.append(f"skill contract failed ({script.relative_to(repo)}): {detail}")
+    return errors
+
+
 def main():
     repo = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent
-    errors = check_skills(repo) + check_marketplace(repo) + check_paths(repo)
+    errors = check_skills(repo) + check_marketplace(repo) + check_paths(repo) + check_skill_contracts(repo)
     if errors:
         for error in errors:
             print(f"FAIL: {error}", file=sys.stderr)
         print(f"\n{len(errors)} problem(s) found.", file=sys.stderr)
         return 1
-    print("OK: skills.json, marketplace.json, plugin manifests, and tracked docs validated.")
+    print("OK: skills.json, marketplace.json, plugin manifests, tracked docs, and skill contracts validated.")
     return 0
 
 

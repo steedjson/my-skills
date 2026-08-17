@@ -185,3 +185,16 @@ RISKS: 未验证项
 - 达到软预算：返回 `SOFT_BUDGET_EXHAUSTED`，不自动提高 effort、续派或创建替代任务。
 - 用户要求硬费用上限，但运行面没有硬限制或中断能力：返回 `HARD_BUDGET_UNAVAILABLE`，不创建任务。
 - 静态技能校验不证明真实任务生命周期；未经用户明确批准，不运行高成本委派 E2E。
+
+## 回归测试
+
+每次修改本技能后运行：
+
+```bash
+python3 model-delegate/scripts/validate_contract.py
+python3 scripts/validate_repo.py
+```
+
+第一条命令使用固定历史基线检查上下文体积、估算 token、capsule 和报告行数、读写协议、模型锁定、预算语义及父任务验收上限。token 使用透明的混合文本估算：CJK 类字符按 1 token，其余内容按每 4 UTF-8 bytes 估算 1 token。
+
+该指标只覆盖技能、capsule 和报告文本，不包含系统提示、工具 schema、聊天历史、缓存、推理或实际执行；不得当作真实账单。准确费用 E2E 只能在运行面提供可比较 usage 数据后执行。

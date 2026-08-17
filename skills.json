@@ -28,7 +28,8 @@
       "description": "Low-context Codex delegation with explicit model selection, read/write contracts, and fail-closed budget controls",
       "files": [
         "SKILL.md",
-        "references/compact-coordinator.md"
+        "references/compact-coordinator.md",
+        "scripts/validate_contract.py"
       ]
     },
     {
