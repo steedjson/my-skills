@@ -123,6 +123,7 @@ description: 为 Codex 建立低上下文成本的任务分工。用于判断工
 - 使用一个原生子智能体，`fork_context=false`，显式传入用户确认的模型和 effort。
 - `PASSIVE_RETURN`：一次 `wait_agent`，不调用 `send_input`。
 - `PASSIVE_SESSION`：最多两次 `wait_agent`、一次 `send_input`；第二轮只传依赖第一轮的增量问题。
+- 完成通知已包含最终 capsule 时直接使用，不再调用对应轮次的 `wait_agent`。
 - 子智能体返回不超过 10 行的 `RETURN_CAPSULE`；主任务不读取原始日志或重复执行同一调查。
 - 子智能体工具不可用、超时或协议不合格时返回 `TOOLING_GAP` 或 `BLOCKED`，不自动改用其他模式。
 

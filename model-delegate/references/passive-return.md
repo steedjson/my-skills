@@ -38,7 +38,7 @@ RETURN_PROFILE: one_field_per_line=YES; report<=10 行
 
 1. 调用一次 `spawn_agent`，设置 `fork_context=false`，显式传入已确认的 `model` 和 `reasoning_effort`。
 2. 子智能体不得继承父聊天、写文件、创建后代、请求中间确认或扩大范围。
-3. 主任务仅在结果是下一步必要输入时调用一次长等待 `wait_agent`。
+3. 完成通知已包含最终 `RETURN_CAPSULE` 时直接使用；否则最多调用一次长等待 `wait_agent`。
 4. 普通进度不处理；不得调用 `send_input`，不得第二次调用 `wait_agent`。
 5. 为避免额外父模型回合，不在返回路径调用 `close_agent`；本模式每个父任务最多保留一个已完成子智能体，并在父任务结束时释放。
 

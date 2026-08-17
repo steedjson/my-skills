@@ -38,9 +38,9 @@ RETURN_PROFILE: one_field_per_line=YES; report<=10 行
 ## 调用流程
 
 1. 调用一次 `spawn_agent`，设置 `fork_context=false`，显式传入模型和 effort。
-2. 调用一次 `wait_agent` 获取第一轮 `SESSION_RETURN_CAPSULE`。
+2. 第一轮完成通知已包含最终 capsule 时直接使用；否则最多调用一次 `wait_agent`。
 3. 第一轮足够时直接完成；不得自动启动第二轮。
-4. 确需第二轮时，调用一次 `send_input`，只发送 `ROUND_DELTA`，再调用一次 `wait_agent`。
+4. 确需第二轮时，调用一次 `send_input`，只发送 `ROUND_DELTA`；完成通知没有最终 capsule 时再调用一次 `wait_agent`。
 5. 第二轮后必须结束。不得第三次等待、第二次 `send_input`、创建新子智能体或自动切换模式。
 6. 不在返回路径调用 `close_agent`，避免额外父模型回合；父任务结束时释放。
 

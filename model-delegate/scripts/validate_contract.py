@@ -333,6 +333,7 @@ def validate_contract(
         "被动模式子智能体不得调用 worktree 管理工具或依赖子工作区写入",
         "`fork_context=false`",
         "`PASSIVE_SESSION`：最多两次 `wait_agent`、一次 `send_input`",
+        "完成通知已包含最终 capsule 时直接使用",
         "不自动改用其他模式",
         "核心协议不得依赖特定代理、供应商、价格表、本地计费数据库或 usage API",
         "`COMPACT_COORDINATOR` 只在用户明确要求旧主任务压缩后继续验收时使用",
@@ -413,6 +414,7 @@ def validate_contract(
         "fork_context=false",
         "不得调用 `send_input`",
         "不得第二次调用 `wait_agent`",
+        "完成通知已包含最终 `RETURN_CAPSULE` 时直接使用",
         "不在返回路径调用 `close_agent`",
         "RETURN_CAPSULE",
         "协议不合格、包含原始日志或超过 10 行时返回 `BLOCKED`",
@@ -439,6 +441,7 @@ def validate_contract(
         "第二轮问题必须依赖第一轮结果",
         "不得自动启动第二轮",
         "调用一次 `send_input`",
+        "第一轮完成通知已包含最终 capsule 时直接使用",
         "不得第三次等待、第二次 `send_input`",
         "预计需要第三轮时直接使用 `HANDOFF`",
         "第一轮协议不合格时返回 `BLOCKED`",
@@ -660,6 +663,13 @@ def mutation_self_test(
         "session allows round three": variant(
             passive_session=passive_session.replace(
                 "预计需要第三轮时直接使用 `HANDOFF`", "允许进入第三轮", 1
+            )
+        ),
+        "completion notification ignored": variant(
+            skill=skill.replace(
+                "完成通知已包含最终 capsule 时直接使用",
+                "完成通知后仍调用 wait_agent",
+                1,
             )
         ),
     }
