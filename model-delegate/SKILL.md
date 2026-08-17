@@ -1,378 +1,159 @@
 ---
 name: model-delegate
-description: 为 Codex 建立轻量双任务分工。适用于先用 grill-me 确认方案，再把边界清楚的实现任务委派给指定模型执行，并由主任务统一审查验收。
+description: 为 Codex 建立低上下文成本的任务分工。用于把已确认、边界清楚的实现交给新的 Codex App 顶层任务，默认单向交接并结束旧主任务；只读工作默认留在当前任务，高风险工作可选压缩后协调验收。
 ---
 
 # 模型委派
 
-使用 Codex App 原生顶层任务协调。当前任务作为规划与审查任务，另建一个可见执行任务。不要使用子智能体协议、独立 `codex exec`、脚本、插件、MCP 编排、共享状态文件或高频轮询。
+使用 Codex App 原生顶层任务。最大成本风险是旧主任务在每次唤醒时重复处理长历史，因此默认不让旧主任务等待、轮询或验收。
 
-## 低消耗模式
+## 模式选择
 
-默认启用低消耗模式。主任务只在“委派前决策、执行任务状态发生实质变化、最终验收”三个阶段推理，不为进度展示、心跳或重复确认唤醒模型。
+每次只选择一种模式：
 
-- 只读计划、方案整理、普通审计和信息收集默认由主任务完成，不创建执行任务。只有用户显式要求委派时，才允许创建一个只读执行任务。
-- 每个顶层用户任务默认最多创建一个执行任务。增加任务、并行只读委派或扩大范围前，必须向用户说明原因和预期成本并获得明确确认。
-- 创建任务前一次性完成需求、边界、工具基线和验收条件整理；创建后不重复分析相同上下文。
-- 执行期间进入静默等待。没有新状态、阻塞或完成结果时，不读取任务、不发送消息、不重复调用任务列表。
-- 优先使用一次较长的有界 `wait_threads`。返回值已包含最终消息时直接使用，不再调用 `read_thread` 获取同一内容。
-- `list_threads` 和 `read_thread` 仅用于恢复、身份校验、结果缺失或异常诊断，不用于常规进度检查。
-- 工具支持并行或批量调用时，把互不依赖的状态检查、验证和只读审查合并到一次调用；不要逐个命令唤醒主任务。
-- 执行任务只返回结构化摘要和失败命令的关键错误，不粘贴完整日志、完整 diff 或重复任务包。
-- 主任务按风险复验，不机械重复执行任务的全部检查。执行任务证据完整且变更低风险时，只重跑仓库必需门禁；高风险或证据不足时才扩大检查。
-- 主任务先检查提交元数据、文件边界、状态和摘要；只有发现越界、冲突、敏感变更或行为风险时才展开完整差异。
+| 模式 | 适用范围 | 默认行为 |
+|---|---|---|
+| `INLINE` | 计划、方案整理、普通审计、信息收集、小修正 | 当前任务直接完成，不创建任务 |
+| `HANDOFF` | 已确认、边界清楚的低风险或中风险实现 | 创建一个全新执行任务，旧主任务立即结束 |
+| `COMPACT_COORDINATOR` | 数据库迁移、数据修复、认证授权、租户隔离、生产配置、并发、公共接口、不可逆操作，或用户明确要求独立验收 | 创建执行任务；旧主任务先暂停，用户执行 `/compact` 后最多恢复一次验收 |
 
-低消耗模式不能跳过身份验证、未提交变更检查、主仓库保护、提交确认和高风险验收。节省来自减少重复上下文与无效唤醒，不来自降低必要安全边界。
+默认优先级：`INLINE` > `HANDOFF` > `COMPACT_COORDINATOR`。不要因工具可用而委派。用户显式要求只读委派时使用 `HANDOFF`，仍保持单任务。
 
-### 成本熔断
+若当前任务已有长讨论、大量工具输出或多轮方案变更，禁止选择会持续唤醒旧任务的流程。使用 `HANDOFF`；高风险任务必须协调时，使用 `COMPACT_COORDINATOR`。
 
-`create_thread` 没有可强制执行的 token budget 参数，不得声称设置了硬 token 上限。改用可观察的工作预算：
+不要使用 `/fork` 解决上下文成本；它会复制当前聊天历史。优先创建全新任务。`create_thread` 不可用时，输出紧凑交接包，让用户通过 `/task` 开始新任务。
 
-- `MAX_DELEGATED_TASKS: 1`
-- `MAX_AUTOMATIC_WAITS: 1`
-- `MAX_CORRECTION_MESSAGES: 1`
-- `MAX_BROAD_DISCOVERY_PASSES: 1`
-- `MAX_REPORT_LINES: 20`
+## 硬约束
 
-任务包必须包含 `COST_BUDGET`。执行任务必须先使用索引、定向读取或批量工具获取最小必要上下文；不得重复广扫仓库、重复读取相同文件、重复运行无变化检查、粘贴完整日志或扩展到相邻问题。
-
-预计无法在预算内完成时，执行任务立即停止并返回：
-
-```text
-STATUS: BUDGET_EXHAUSTED
-DELEGATION_KEY: 原样回显主任务标识
-COMPLETED: 已完成内容
-REMAINING: 未完成内容
-EVIDENCE: 最小必要证据
-NEXT_DECISION: 继续、缩小范围或改由主任务完成
-```
-
-主任务收到 `BUDGET_EXHAUSTED` 后不得自动续派、创建替代任务或提高 effort。必须先向用户报告实际进度和继续成本。
-
-## 阶段性上下文压缩
-
-主任务上下文随对话增长，每次工具返回都会重新进入推理。为控制主任务费用，在不跳过安全边界的前提下压缩上下文：
-
-- 委派前一次性生成紧凑任务包；后续不再重新读取已经确认的方案讨论和早期分析。
-- 委派完成或超时后，主任务只保留 `DELEGATION_RECORD`、结果摘要和验收证据；不重新带入完整任务包或旧进度。
-- 验收阶段只读取提交差异和检查结果，不重复导入执行任务的完整报告。
-- 主任务无法真正删除已产生的历史，但通过避免重复带入和重复推理来减少有效上下文占用。
+- 只有用户显式调用本技能或明确确认委派后，才创建任务。
+- 默认最多创建一个执行任务；不得自动拆成多个任务或并发。
+- 始终使用保存项目的 `local` 环境和当前共享检出目录。
+- 不创建、切换、合并、rebase、cherry-pick 或清理 worktree。
+- 不使用子智能体协议、独立 `codex exec`、脚本编排、共享状态文件或高频轮询。
+- 执行任务不得再创建任务，不得扩大范围。
+- `create_thread` 没有硬 token budget 参数；不要声称已设置 token 上限。
 
 ## 与 grill-me 联动
 
-`grill-me` 只负责提问、质疑和收敛方案，不负责写代码或创建执行任务。完成 grilling 后，用户显式调用 `$model-delegate`，或明确说“按已确认方案委派执行”，本技能才开始创建执行任务。
+`grill-me` 只负责质疑并收敛方案。用户随后显式调用 `$model-delegate` 或明确说“按已确认方案委派执行”时：
 
-承接 grilling 结果时：
+1. 把最终方案作为既定输入，不重复架构讨论。
+2. 仍有未决范围、权限或验收条件时，留在 `INLINE` 补齐。
+3. 只发送最终决策、边界、必要事实和验收条件，不发送完整聊天记录。
 
-1. 把最终确认的方案当作 `DECISION` 和 `INPUTS`，不要重新进行架构争论；
-2. 若方案仍有未决选择、范围或验收条件，先回到规划任务补齐，不创建执行任务；
-3. 只把已确认的边界、文件范围、验收条件和约束发送给执行任务；
-4. 主任务不直接落地实现，只负责拆解、委派、等待、审查和验收。
+## 委派前检查
 
-## 主任务集成级小修正
+一次性完成以下检查：
 
-主任务允许完成不改变架构和业务逻辑的小修正，避免为格式或注册信息重新唤醒委派任务：
+1. 读取项目 `AGENTS.md`、相关目录规则及明确要求的技能。
+2. 记录 `PROJECT_ROOT`、当前分支、`BASE_COMMIT`、文件边界、检查命令和相关工具。
+3. 按项目要求使用 CodeGraph、OpenWolf 或其他工具；不要假设新任务继承主任务已加载的上下文或实时连接。
+4. 检查 `git status`。工作区不干净时不得自动 stash、覆盖或删除用户修改；先让用户决定。
+5. 工作区干净后运行 `git pull --ff-only`。无法 fast-forward 时停止，不自动 merge 或 rebase。
+6. 使用 `list_projects` 确认保存项目及 `projectId`。
 
-- 允许：合并冲突解决、路径修正、格式化、注册信息、元数据和明显遗漏补齐。
-- 禁止：改变业务逻辑、架构、数据库迁移、权限、数据范围、公共接口或不可逆操作。
-- 超出允许范围时必须发回原委派任务，主任务不得越界实现。
+只做一次定向发现。不要在主任务重复扫描仓库、重新读取已确认文件或执行实现级调查。
 
-推荐交接格式：
+## 模型选择
 
-```text
-GRILLING_STATUS: COMPLETE
-DECISION: 已确认的实现方案
-SCOPE: 本次只执行的范围
-ACCEPTANCE: 可验证的完成条件
-FILE_BOUNDARIES: 允许读取或修改的文件
-CONSTRAINTS: 用户已确认的限制
-OPEN_RISKS: 仍需主任务审查的风险
-```
+- 用户明确指定规范模型名和 reasoning effort：按当前 `create_thread` 接受的组合传入。
+- 用户未指定：省略 `model` 和 `thinking`，使用用户配置的运行时默认值。
+- 用户要求选择，或指定组合被拒绝：列出当前 `create_thread` 明确接受的全部规范模型和 effort。
+- `max` 或 `ultra` 只在用户显式指定时使用；不得因任务复杂而自动提高。
+- 不使用 provider 路由后缀、显示名或历史记录猜测模型。
 
-先搜索或加载当前运行面提供的任务协调工具。若没有 `create_thread`、`send_message_to_thread`、`wait_threads` 和 `read_thread`，停止并报告不兼容。恢复已有委派任务时优先使用 `list_threads`；若该工具不可用，只能使用已验证的正式 `threadId`，不得猜测候选会话。不得静默改用默认 Agent 或其他执行路径。
+## 交接包
 
-## 职责
-
-规划任务负责：
-
-- 理解需求、拆解边界、决定架构和风险；
-- 选择可独立验收的执行任务；
-- 创建执行任务并保存 `DELEGATION_KEY`、`clientThreadId` 和正式 `threadId` 的可验证绑定；
-- 仅在任务恢复时盘点、校验并推进已有执行任务；
-- 处理阻塞、审查结果、检查差异和完成最终验收；
-- 向用户提供最终答复。
-
-执行任务负责：
-
-- 只完成收到的任务包；
-- 不改变整体目标或架构，不创建其他任务；
-- 不修改无关文件，不执行未授权的破坏性操作；
-- 运行约定检查并返回证据；
-- 遇到阻塞时停止在安全位置，返回结构化阻塞报告。
-
-## 执行模型确认
-
-每个顶层用户任务首次准备委派时，只确认一次执行模型：
-
-1. 若用户已明确给出 `create_thread` 接受的规范模型名和 reasoning effort，直接使用。
-2. 用户未指定时，默认使用当前运行面接受的 `gpt-5.6-luna`：只读委派使用 `low`，边界清楚的写任务使用 `high`。对应组合不可用时再让用户选择，不自动提高 effort。
-3. `max` 或 `ultra` 仅在用户显式指定时使用。若主任务判断高复杂度写任务确需 `max`，必须先说明原因和成本风险并获得用户明确确认；只读计划、审计、检索和普通代码修改不得自动使用 `max`。
-4. 用户要求选择模型，或默认组合不可用时，列出当前运行面 `create_thread` 明确接受的全部规范模型名及每个模型可用的 reasoning effort，供用户明确选择；不得只列推荐组合、截断为固定数量，或设置静态模型白名单。
-5. 只展示和传入 `create_thread` 返回或明确接受的规范模型名。若运行时返回 `deepseek-v4-flash-0731` 等具体 ID，使用该规范 ID，不根据显示名、路由别名或历史记录猜测。
-6. 默认组合或用户选择只对当前顶层任务有效；不修改主任务模型、全局默认模型或用户配置。
-7. 创建执行任务时显式传入已选定的模型和 effort。模型或 effort 被拒绝时返回原始错误，并重新列出当前运行面实际接受的全部选项；不得自动换成未经用户确认的模型。
-
-只有用户明确确认委派后才调用 `create_thread`。确认模型和 effort 即视为允许为本次委派创建执行任务。
-
-只使用 `create_thread` 接受的规范模型名。不得展示或传入带 provider 路由后缀的别名，例如 `-csap-tokenplan`、`-csap-oai1` 或 `-csap-codexbuy-oai`。若运行时元数据使用 `route-alias (canonical-name)` 格式，创建任务时使用括号内的规范模型名，例如 `deepseek-v4-flash-0731`，不得使用括号外的路由别名。
-
-不要从 `send_message_to_thread` 的模型元数据推断 `create_thread` 支持的模型或 effort，也不要根据显示名称猜测。只有 `create_thread` 明确接受过的组合才能作为已确认示例，例如 `model=deepseek-v4-flash-0731 effort=xhigh`。工具只证明请求值时，报告“请求模型/effort”；只有任务元数据明确返回实际值时，才报告“实际模型/effort”。
-
-## 项目工具与技能基线
-
-委派任务应尽量复现主任务的项目工作方式，但不假定执行任务会继承主任务的历史消息、实时 MCP 连接、工具调用结果或已加载上下文。主任务在创建执行任务前，必须记录本次项目基线：
-
-- `PROJECT_ROOT`：主项目检出目录；委派任务直接在其中工作，共享虚拟环境、`.env`、服务和工具；
-- `BASE_COMMIT`：委派前主任务所在分支的最新提交 ID，用于审查时区分委派任务的改动；
-- `PROJECT_RULES`：仓库根目录、相关路径和项目配置声明的适用规则；
-- `PROJECT_TOOLING`：本任务实际相关的 MCP、技能、CLI、钩子、项目规则或其他工具；
-- `CHECKS`：项目已有的测试、类型检查、构建、格式化或校验命令；
-- `TOOL_LIMITS`：工具只读范围、禁止操作和执行环境限制；
-- `POST_COMMIT_ACTIONS`：主任务合并后需要执行的工具刷新、记录、同步或复核动作。
-
-主任务按以下优先级发现和选择工具：
-
-1. 用户明确指定的工具、技能和限制；
-2. 项目 `AGENTS.md`、项目配置、项目内技能和相关目录规则明确要求或推荐的工具；
-3. 当前运行面实际可用的全局工具、技能、CLI 和连接；
-4. 根据任务类型、文件范围、风险和验收条件，只选择有直接作用的工具。
-
-项目规则未声明具体工具时，主任务自动选择与任务相关且当前可用的工具，不逐次要求用户确认。不得因为某个工具在全局可用就默认要求所有执行任务使用，也不得把 CodeGraph、OpenWolf 或其他特定工具写成固定基线。发现它们时，按普通工具条目记录；未发现或与任务无关时不加入任务包。
-
-任务包必须增加：
+创建任务前生成一个不超过 30 行的 `DELEGATION_CAPSULE`。创建后不再重写或扩展。
 
 ```text
-TOOLING_BASELINE:
-  PROJECT_ROOT: 主项目检出目录，直接在其中工作
-  BASE_COMMIT: 委派前最新提交 ID
-  PROJECT_RULES: 适用项目规则及读取顺序
-  PROJECT_TOOLING:
-    - NAME: 工具或技能名称
-      TYPE: mcp/skill/cli/hook/project-rule/other
-      SOURCE: user/project/runtime
-      REQUIRED: true/false
-      USE_WHEN: 与本任务相关的使用条件
-  POST_COMMIT_ACTIONS:
-    - NAME: 动作名称
-      TOOL: 对应 PROJECT_TOOLING 条目
-      ACTION: refresh/record/sync/recheck
-      REQUIRED: true/false
-      ENTRYPOINT: 项目或工具明确提供的执行入口
-  CHECKS: 主任务要求执行的检查
-  TOOL_LIMITS: 工具、权限和环境限制
-```
-
-执行任务开始时必须：
-
-1. 读取 `PROJECT_ROOT` 中的项目规则和工具声明；直接使用主项目的虚拟环境、`.env`、服务 和工具，无需额外创建或链接环境。
-2. 按 `PROJECT_TOOLING` 的 `USE_WHEN` 使用相关工具；工具和索引在主项目目录中天然可用，不因未复制状态而误报缺失。
-3. 只修改 `FILE_BOUNDARIES` 声明的文件；不得修改无关文件或执行未授权的破坏性操作。
-4. 使用 `PROJECT_TOOLING` 中与任务相关的工具和技能，并按 `CHECKS` 在 `PROJECT_ROOT` 执行验证。
-5. 完成前必须 `git add` 预期文件并 `git commit`，返回 `COMMIT_ID`；不得把未提交修改作为最终交付。
-
-主任务和执行任务不能使用同一实时工具连接时，执行任务必须在报告中说明实际可用性。仅当任务包标记为 `REQUIRED: true` 的工具、技能或项目规则无法获得时，才返回阻塞性 `TOOLING_GAP`；不得静默降级。可选工具缺失但不影响验收时，记录缺失、替代方式和不影响验收的依据。
-
-## 提交后工具收尾
-
-执行任务提交变更并通过关键检查后，由主任务在 `PROJECT_ROOT` 完成收尾：
-
-1. 只执行 `POST_COMMIT_ACTIONS` 中声明且与实际变更相关的动作，例如刷新索引、记录知识、同步元数据或重新执行影响分析；没有声明动作时不虚构收尾义务。
-2. 只使用工具或项目规则明确提供的受支持入口。不得猜测格式、伪造记录、复制执行任务状态，或自行初始化项目未要求的工具。
-3. 工具产生记录或元数据文件时，检查其内容只描述已合并、已验收的变更；按项目规则运行必要检查，并确保结果处于可审查状态后才报告完成。
-4. `REQUIRED: true` 的提交后动作失败时标记 `STATUS: BLOCKED`；可选动作不可用时记录实际原因和影响，不得声称已完成该动作。
-
-## 创建执行任务
-
-### 并发策略
-
-写任务默认串行：主任务等待当前写委派返回 `COMMIT_ID` 后再发下一个，零并发写委派。这是默认行为，不需要显式声明。
-
-只读委派（审计、分析、审查、探查，不修改任何文件）默认不创建；用户明确要求后也保持单任务串行。只有用户明确批准并行及额外成本时，才允许多个只读任务并发。
-
-并行写任务为 opt-in 显式模式，需同时满足全部条件：
-
-- 主任务为每个写委派声明互不相交的 `FILE_BOUNDARIES`；
-- 主任务承担分区正确性责任；分区错误导致的冲突由主任务处理；
-- 任何写委派修改 `FILE_BOUNDARIES` 外文件时立即 abort 并 revert；
-- 主任务显式选择 `PARALLEL_WRITE_MODE`，不默认启用。
-
-分区正确性无法保证时使用串行。不确定时使用串行。
-
-调用 `create_thread` 时：
-
-- 使用用户指定或按上述优先级确定的模型和 effort；
-- 设置清晰标题；
-- 关联当前项目；
-- 始终使用 `local` 环境，委派任务直接在主项目目录工作，共享虚拟环境、`.env`、服务和工具；任何情况下不得创建、切换、合并或清理 worktree；
-- 委派前必须先 `git pull --ff-only` 拉取远端最新；fast-forward 失败（本地有分叉）时停止并让用户决定，不自动 merge 或 rebase；
-- 随后检查 `git status`；工作区不干净时主任务必须先提交或 stash，确保委派任务从干净状态开始；
-- 任务包必须要求执行任务只修改 `FILE_BOUNDARIES` 声明的文件，完成后 `git add` 并 `git commit`，返回 `COMMIT_ID`；
-- 将完整任务包放入首条消息。
-
-主任务必须为每个执行任务生成唯一、不可复用的 `DELEGATION_KEY`，并立即保存一个 `DELEGATION_RECORD` 状态块作为唯一可信恢复来源。恢复时逐项验证，禁止按标题或最近活动猜测。
-
-```text
-DELEGATION_RECORD:
-  DELEGATION_KEY: 本次委派唯一标识
-  CLIENT_THREAD_ID: 创建响应返回的 clientThreadId
-  THREAD_ID: 正式 threadId，经运行面映射验证
-  HOST_ID: 任务所在 host
-  PROJECT: 关联项目
-  PROJECT_ROOT: 主项目检出目录
-  BASE_COMMIT: 委派前最新提交 ID
-  COMMIT_ID: 委派任务提交的变更提交 ID，完成后填入
-  CURSOR: 最新 wait_threads 游标，每次等待后更新
-  TASK_TITLE: 任务标题，仅作参考
-```
-
-不得用任务标题、模型、创建时间、项目名、最近活动会话或用户可见短 ID 推断正式 `threadId`。
-
-若创建时只返回 `clientThreadId`，等待与该 `clientThreadId` 对应的任务初始化完成后，才记录正式 `threadId`。只有创建响应、任务列表元数据或运行面明确返回的映射，才能确认 `clientThreadId -> threadId`。后续通信只使用已验证的正式 `threadId`；不得把 `clientThreadId` 当成正式 `threadId` 传入执行工具。
-
-任务包必须包含：
-
-```text
-ROLE: Bounded execution task reporting to the planning task
-MODE: read-only | write；read-only 不修改任何文件且默认单任务串行；write 受串行策略约束
-DELEGATION_KEY: 主任务生成的本次委派唯一标识，所有状态报告必须原样回显
-SCOPE: 明确目标和允许处理的范围
-INPUTS: 必要上下文、文件和已知事实
+DELEGATION_CAPSULE
+MODE: HANDOFF | COMPACT_COORDINATOR
+ROLE: Standalone bounded execution task; report directly to user
+DELEGATION_KEY: 唯一标识
+PROJECT_ROOT: 共享主项目检出目录
+BASE_COMMIT: 委派前提交
+SCOPE: 唯一目标
+INPUTS: 已确认的最小事实
+ACCEPTANCE: 可执行验收条件
+FILE_BOUNDARIES: 允许读取和修改的文件
+PROJECT_RULES: 规则读取顺序
+PROJECT_TOOLING: 仅列本任务需要的工具及 REQUIRED 状态
+CHECKS: 必须运行的检查
+POST_COMMIT_ACTIONS: 明确存在的收尾动作
 COST_BUDGET:
-  MODEL_EFFORT: 本任务确认的 effort
+  MAX_DELEGATED_TASKS: 1
   MAX_BROAD_DISCOVERY_PASSES: 1
-  MAX_CORRECTION_MESSAGES: 1
   MAX_REPORT_LINES: 20
-  STOP_RULE: 预计超出预算时返回 STATUS: BUDGET_EXHAUSTED，不自行扩展
-TOOLING_BASELINE: 包含 PROJECT_BASE_ROOT、EXECUTION_ROOT、POST_COMMIT_ACTIONS 和主任务记录的项目规则、工具、技能、检查基线
-ENVIRONMENT_BASELINE: 运行时、虚拟环境、依赖、服务、环境变量和验证方式
-OUTPUT: 预期交付物和报告格式
-ACCEPTANCE: 可执行的验收条件
-FILE_BOUNDARIES: 允许读取的文件范围；write 模式下同时为允许修改范围
-CONSTRAINTS: 权限、安全、兼容性和禁止事项
+  STOP_RULE: 超出范围或预算时立即返回 BLOCKED 或 BUDGET_EXHAUSTED
+CONSTRAINTS: local、无 worktree、无范围扩展、无破坏性操作
 ```
 
-任务包的 `CONSTRAINTS` 必须写明：执行任务不得把未提交修改作为最终交付；完成前必须 `git add` 预期文件并 `git commit` 到当前分支，返回 `COMMIT_ID`；不得修改 `FILE_BOUNDARIES` 以外的文件。
-`MODE: read-only` 的委派不修改任何文件，不提交、不返回 `COMMIT_ID`，只返回分析或审查结果。
+`FILE_BOUNDARIES` 是硬边界。业务逻辑、架构、权限、数据范围或公共接口未在 capsule 明确授权时，执行任务必须停止。
 
-不要把整体架构判断、跨任务协调、权限决策或最终验收交给执行任务。
+## HANDOFF
 
-## 等待与阻塞反馈
+这是默认委派模式。
 
-使用一次较长的有界 `wait_threads` 等待状态变化；不要循环读取任务或发送心跳。
+1. 调用 `create_thread`，传入完整 capsule，使用保存项目的 `local` 环境。
+2. 执行任务直接面向用户完成实现、验证和最终报告，不向旧主任务回传。
+3. 创建成功后，旧主任务只回复任务链接、模式、目标和未验证项。
+4. 立即结束旧主任务。不得调用 `wait_threads`、`read_thread`、`list_threads` 或 `send_message_to_thread` 跟踪执行。
+5. 返回 `threadId` 时发出 `::created-thread{threadId="..."}`；仅返回 `clientThreadId` 时发出对应 `clientThreadId` 指令。
 
-- 返回完成且已包含执行任务最终消息：直接进入验收，不再调用 `read_thread`。
-- 返回需要关注或结构化阻塞：只处理新增事实，并向同一任务发送一次决定。
-- 返回超时但没有新状态：立即暂停并保存最新 `cursor`；不自动再次等待，不调用 `read_thread` 重读旧消息，不发送催促。等待用户再次唤醒后再决定是否继续。
-- 返回结果缺失、身份不一致或工具错误：才使用一次 `read_thread` 或 `list_threads` 做定向诊断。
+执行任务必须：
 
-等待前把已验证的 `threadId`、`hostId` 和最新游标保存在 `DELEGATION_RECORD` 中。后续 `wait_threads` 必须携带 `afterCursor`，避免旧消息重复进入上下文。超时本身不等于失败；一次等待无变化后即暂停，等待用户或运行面再次唤醒后从该游标继续。
+- 先验证 `PROJECT_ROOT`、`BASE_COMMIT`、项目规则和工作区状态。
+- 使用索引、定向读取或批量工具获取最小上下文；最多一次广域发现。
+- 只修改 `FILE_BOUNDARIES` 内文件。
+- 运行约定检查；完成前 `git add` 预期文件并提交，返回 `COMMIT_ID`。
+- 低风险和中风险任务自行完成差异审查及验收。
+- 遇到阻塞或预算不足时在执行任务中直接向用户报告，不唤醒旧主任务。
 
-## 暂停后恢复
+## INLINE
 
-规划任务在重新启动、恢复上下文或用户要求继续时，必须先恢复已有委派，再开始新委派、重新拆解或向用户报告完成：
+不调用任务协调工具。当前任务直接完成工作并按项目规则验证。
 
-1. 从 `DELEGATION_RECORD` 读取每个已知委派的 `DELEGATION_KEY`、`CLIENT_THREAD_ID`、`THREAD_ID`、`HOST_ID`、`PROJECT`、`PROJECT_ROOT`、`BASE_COMMIT`、`COMMIT_ID` 和 `CURSOR`；可用时使用 `list_threads` 交叉检查任务元数据。任何一项无法验证时记录 `THREAD_IDENTITY_GAP`，不得向候选任务发送继续或修改指令。
-2. 只有同时满足以下条件，才视为身份已验证：正式 `threadId` 有运行面返回的创建映射；任务属于同一项目；任务首条消息或状态报告回显相同 `DELEGATION_KEY`；其 `PROJECT_ROOT`、任务范围与保存的绑定一致。
-3. 不得因标题、分支名、模型、最近活动时间、相同项目或显示顺序相似而选择会话。任何一项无法验证时，记录 `THREAD_IDENTITY_GAP`，不得向候选任务发送继续或修改指令。
-4. 身份已验证且任务未完成时，主任务必须向原正式 `threadId` 发送一次恢复消息，要求先检查当前状态，再从原任务包的安全位置继续。每次恢复周期对同一任务至多发送一次；随后使用一次有界 `wait_threads` 等待新状态，避免重复催促。
-5. 身份已验证且任务返回 `STATUS: BLOCKED` 时，主任务能根据已确认方案自行决定的，立即用同一 `threadId` 发送决定并要求继续；需要用户新决定的，向用户报告该阻塞，不创建替代任务。
-6. 身份已验证且任务已完成时，直接进入审查、验证和主任务收尾，不发送恢复消息。
+以下情况强制使用 `INLINE`：
 
-恢复消息格式：
+- 只读计划、方案整理、普通审计或信息收集，且用户未明确要求委派。
+- 创建任务的固定成本高于工作本身。
+- 范围仍未收敛。
+- 工作区状态不满足共享检出目录安全条件。
 
-```text
-DELEGATION_KEY: 原样回显已验证标识
-ACTION: RESUME_ORIGINAL_TASK
-INSTRUCTION: 先检查当前 Git 状态、未完成步骤和已有检查结果；仅在原任务包范围内继续。
-REPORT: 回显 DELEGATION_KEY、当前状态、已完成项、下一步、阻塞项和实际检查。
-```
+## COMPACT_COORDINATOR
 
-执行任务遇到无法自行安全解决的问题时，结束当前回合并返回：
+仅高风险工作或用户明确要求旧主任务独立验收时使用。选择后才读取 [references/compact-coordinator.md](references/compact-coordinator.md)。
 
-```text
-DELEGATION_KEY: 原样回显主任务标识
-STATUS: BLOCKED
-BLOCKER: 阻塞事实
-EVIDENCE: 已检查内容和实际错误
-DECISION_NEEDED: 需要规划任务决定的问题
-SAFE_NEXT_STEP: 获得决定后可执行的最小下一步
-```
+核心限制：
 
-规划任务读取身份已验证的阻塞报告，完成必要判断，再用 `send_message_to_thread` 向同一 `threadId` 发送决定或修正任务。续派默认不传 model 或 thinking，保持原执行任务设置不变。不要新建替代执行任务，除非原任务已不可恢复或需要隔离的新范围。
+- 创建执行任务后，旧主任务不得立即等待。
+- 先输出 `COMPACTION_CHECKPOINT` 并要求用户执行 `/compact`。
+- 用户压缩并明确要求继续验收后，旧主任务最多调用一次 `wait_threads`、一次定向审查、一次纠偏。
+- 无法确认已压缩时，不恢复协调；改用新的独立审查任务。
 
-等待本身不需要高频主模型推理；只有工具返回新状态或任务消息后，规划任务才继续处理。超时不等于失败，先读取任务状态再判断。
+## 执行任务报告
 
-## 风险矩阵
-
-验收强度按变更类型分级。项目规则可以提高风险等级，但不能降低强制高风险项。
-
-| 等级 | 条件 | 主任务复验范围 |
-|------|------|----------------|
-| 低 | 文档、技能文本、README、展示元数据、局部非运行配置 | 仓库必需门禁 + 目标格式校验 |
-| 中 | 普通代码、测试、内部 API、依赖调整、路由/视图逻辑 | 最小相关测试 + 仓库门禁 |
-| 高 | 数据库迁移、数据修复、认证授权、租户隔离、生产配置、并发、公共接口、不可逆操作 | 完整差异审查 + 相关集成检查 + 仓库门禁 |
-
-执行任务在完成报告中声明风险等级。主任务对照矩阵确认或升级，不降低。
-
-## 审查与完成
-
-执行任务完成时必须返回：
+报告不超过 20 行：
 
 ```text
-STATUS: COMPLETE
-DELEGATION_KEY: 原样回显主任务标识
+STATUS: COMPLETE | BLOCKED | BUDGET_EXHAUSTED
+DELEGATION_KEY: 原样回显
 RESULT: 完成内容
-FILES: 检查或修改的文件
-CHECKS: 实际运行的检查及简短结果；失败时只附关键错误
-TOOLS_USED: 实际使用的项目工具和关键工具调用
-TOOLING_GAPS: 未获得的工具、技能或规则，以及影响
-BASELINE_MATCH: MATCH/PARTIAL/MISMATCH，并说明依据
-RISKS: 未验证项和剩余风险
+COMMIT_ID: 写任务提交；只读任务省略
+FILES: 修改或检查的文件
+CHECKS: 命令和简短结果
+TOOLS_USED: 实际使用的关键工具
+TOOLING_GAPS: 缺失工具及影响
+RISKS: 未验证项
 ```
 
-完成报告保持紧凑，不超过 20 行。不要附完整命令日志、完整 diff、重复的任务包或逐文件叙述；主任务可从提交按需读取。
+不要附完整日志、完整 diff、重复 capsule 或逐文件叙述。
 
-规划任务必须：
+## 失败策略
 
-1. 等待所有执行任务结束；
-2. 直接使用 `wait_threads` 返回的最终消息；仅在结果不完整或异常时调用 `read_thread`；
-3. 先用一次批量只读检查确认提交存在、共享主项目工作区干净、文件未越界、主仓库安全和变更摘要。按风险矩阵决定是否展开完整差异；
-4. 按风险矩阵复验关键检查，不能把执行任务声明当作最终证据；
-5. 对照 `TOOLING_BASELINE` 审查 `TOOLS_USED`、`TOOLING_GAPS` 和 `BASELINE_MATCH`；必需基线不匹配时不得声明完成；
-6. 确认 `COMMIT_ID` 位于主项目当前分支的提交历史中，且该提交与本次 `DELEGATION_KEY`、`PROJECT_ROOT` 和 `FILE_BOUNDARIES` 一致；
-7. 不执行 `git merge`、`git cherry-pick`、`git rebase`、worktree 操作或委派分支清理。执行任务的提交已直接位于共享主项目分支；
-8. 如需集成级小修正（格式、路径、注册信息），主任务可在共享主项目分支直接完成并重新运行关键检查；超出范围则发回原委派任务；
-9. 按"主任务合并后工具收尾"完成 `POST_COMMIT_ACTIONS`；必需动作失败时不得声明完成；
-10. 需要修正时最多向原 `threadId` 派发一次；再次不通过或发现新范围时暂停并由用户决定；
-11. 统一整合、验收并回复用户。最终报告按报告策略输出。
-
-若执行任务未提交变更、提交 ID 不存在、共享主项目工作区仍有未保存修改，或主仓库存在无法安全处理的未提交修改，规划任务必须先续派要求执行任务整理并提交，或报告 `STATUS: BLOCKED`；不得直接复制文件、强制重置、覆盖主仓库或绕过验收。
-
-## 报告策略
-
-成功时只向用户提供简报；失败或阻塞时才展开完整诊断。
-
-### 成功简报
-
-- 完成结果一句话。
-- 提交 ID 和关键检查结果。
-- 剩余风险和未验证项。
-
-### 失败或阻塞详报
-
-- `DELEGATION_KEY`、`DELEGATION_RECORD` 关键字段、请求模型/effort。
-- 恢复动作、共享分支提交确认结果。
-- 完成状态、验证结果、`POST_COMMIT_ACTIONS` 的实际结果。
-
-- 审查不通过时列出 commit ID、revert 结果和续派状态，并将状态标记为 `BLOCKED` 或未完成。
-- 无法确认的事项。
+- `create_thread` 不可用：输出 capsule，让用户用 `/task` 创建新任务；不得改用 `/fork`。
+- 必需工具缺失：返回 `TOOLING_GAP`；影响安全或验收时停止。
+- 发现范围扩展：返回 `BLOCKED`，不自动增加任务。
+- 预计超出预算：返回 `BUDGET_EXHAUSTED`，不自动提高 effort、续派或创建替代任务。
+- 静态技能校验不证明真实任务生命周期；未经用户明确批准，不运行高成本委派 E2E。

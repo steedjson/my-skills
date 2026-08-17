@@ -25,9 +25,10 @@
     {
       "name": "model-delegate",
       "category": "models-and-routing",
-      "description": "Lightweight planner and executor coordination through native Codex App top-level tasks",
+      "description": "Low-context Codex task delegation with one-way handoff and optional compacted review",
       "files": [
-        "SKILL.md"
+        "SKILL.md",
+        "references/compact-coordinator.md"
       ]
     },
     {

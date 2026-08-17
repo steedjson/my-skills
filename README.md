@@ -19,7 +19,7 @@
 
 #### [model-delegate](./model-delegate/)
 
-使用 Codex App 原生顶层任务建立轻量规划与执行分工。可先运行 `$grill-me` 收敛方案，再显式调用 `$model-delegate` 委派实现；默认采用静默等待、事件驱动读取、紧凑结果和按风险复验，减少规划任务重复唤醒与上下文消耗。
+使用 Codex App 原生顶层任务建立低上下文成本分工。默认 `HANDOFF` 单向交接：新任务直接完成实现与验证，旧主任务不等待、不轮询、不验收；只读工作使用 `INLINE`，高风险工作可选 `/compact` 后一次验收。
 
 #### [ccs-restore-efforts](./ccs-restore-efforts/)
 
@@ -63,7 +63,7 @@ mkdir -p ~/.claude/skills/codexradar-model-advisor
 cp codexradar-model-advisor/SKILL.md ~/.claude/skills/codexradar-model-advisor/SKILL.md
 
 mkdir -p ~/.claude/skills/model-delegate
-cp model-delegate/SKILL.md ~/.claude/skills/model-delegate/SKILL.md
+cp -R model-delegate/. ~/.claude/skills/model-delegate/
 
 mkdir -p ~/.claude/skills/custom-image-gen
 cp -R custom-image-gen/. ~/.claude/skills/custom-image-gen/
@@ -113,7 +113,8 @@ my-skills/
 ├── codexradar-model-advisor/
 │   └── SKILL.md
 ├── model-delegate/
-│   └── SKILL.md
+│   ├── SKILL.md
+│   └── references/compact-coordinator.md
 ├── custom-image-gen/
 │   ├── SKILL.md
 │   └── agents/openai.yaml
