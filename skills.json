@@ -25,10 +25,11 @@
     {
       "name": "model-delegate",
       "category": "models-and-routing",
-      "description": "Portable low-context Codex delegation with one-shot and two-round passive read-only modes, top-level handoff, staged review, bounded log analysis, and user-approved live E2E",
+      "description": "Auto-compaction-aware Codex delegation with context gating, one-shot and two-round passive read-only modes, top-level handoff, staged review, and optional live E2E",
       "files": [
         "SKILL.md",
         "references/compact-coordinator.md",
+        "references/context-gate.md",
         "references/delegation-capsule.md",
         "references/log-analysis.md",
         "references/passive-return.md",

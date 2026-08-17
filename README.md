@@ -19,7 +19,7 @@
 
 #### [model-delegate](./model-delegate/)
 
-使用 Codex 原生子智能体和 App 顶层任务建立可移植的低上下文成本分工。`PASSIVE_RETURN` 单轮回传摘要；`PASSIVE_SESSION` 复用同一只读子智能体处理最多两轮依赖问题；长任务使用 `HANDOFF`，高风险工作使用 `STAGED_REVIEW`。核心不依赖特定代理、供应商、价格表或本地计费数据库。
+使用 Codex 原生子智能体和 App 顶层任务建立自动压缩感知的低上下文成本分工。`CONTEXT_GATE` 校验当前 session、模型有效窗口和自动压缩阈值；`PASSIVE_RETURN` 单轮回传，`PASSIVE_SESSION` 最多双轮；长任务使用 `HANDOFF`。核心不依赖特定供应商或计费数据库。
 
 固定静态门禁：`python3 model-delegate/scripts/validate_contract.py`。它不调用模型或创建任务；真实委派 E2E 只在用户明确确认后运行。运行环境没有 usage 数据时正常完成，并把费用节省标记为未验证。
 
@@ -118,6 +118,7 @@ my-skills/
 │   ├── SKILL.md
 │   ├── references/
 │   │   ├── compact-coordinator.md
+│   │   ├── context-gate.md
 │   │   ├── delegation-capsule.md
 │   │   ├── log-analysis.md
 │   │   ├── passive-return.md

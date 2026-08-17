@@ -1,6 +1,6 @@
 ---
 name: model-delegate
-description: 为 Codex 建立低上下文成本的任务分工。用于判断工作应留在当前任务、由只读辅助模型单轮回传或双轮会话、单向交接、分阶段独立审查或显式压缩协调；支持受限日志分析、软预算和用户确认后的可选真实 E2E。
+description: 为 Codex 建立自动压缩感知的低上下文成本任务分工。用于判断工作应留在当前任务、由只读辅助模型单轮回传或双轮会话、单向交接、分阶段独立审查或显式压缩协调；支持受限日志分析、软预算和可选真实 E2E。
 ---
 
 # 模型委派
@@ -97,6 +97,12 @@ description: 为 Codex 建立低上下文成本的任务分工。用于判断工
 - `max` 或 `ultra` 只在用户明确选择时使用；不得推荐为默认值，不得因任务复杂而自动提高。
 - 不从路由后缀、显示名或历史记录猜测模型。
 
+## CONTEXT_GATE
+
+被动模式或主任务历史明显较长时，先读取 [references/context-gate.md](references/context-gate.md)。只使用当前 session 和当前模型的运行时证据；磁盘配置不证明已生效。
+
+自动压缩只防止上下文溢出，不是费用控制。阈值无效、当前上下文接近阈值或信息不足时，不启动 `PASSIVE_SESSION`；输出 checkpoint 或使用 `HANDOFF`。当前工具面不能主动执行 `/compact`。
+
 ## 交接包
 
 顶层模式通过准入并完成确认后，才读取 [references/delegation-capsule.md](references/delegation-capsule.md)。`INLINE` 和被动模式不读取该文件。
@@ -107,16 +113,11 @@ description: 为 Codex 建立低上下文成本的任务分工。用于判断工
 
 日志、测试输出、依赖树或其他大型文本证据使用 `PROFILE: LOG_ANALYSIS`，可配合任一被动或顶层模式。选择后才读取 [references/log-analysis.md](references/log-analysis.md)。
 
-核心限制：
-
-- 固定 `TASK_KIND: READ_ONLY`，要求明确时间范围、输入位置和分析问题。
-- 最多一次原始数据扫描；优先使用当前环境可用的索引、过滤或聚合工具。
-- 不要求特定工具存在；没有安全过滤方法时返回 `TOOLING_GAP`。
-- 不在任务包或报告中传递完整原始日志。
+固定 `TASK_KIND: READ_ONLY`、明确范围和问题、最多一次原始扫描、禁止原始日志回传；没有安全过滤方法时返回 `TOOLING_GAP`。
 
 ## PASSIVE modes
 
-主任务仍需最终判断、当前上下文尚可继续且子任务严格只读时使用。单轮读取 [references/passive-return.md](references/passive-return.md)；双轮读取 [references/passive-session.md](references/passive-session.md)。
+`CONTEXT_GATE` 通过、主任务仍需最终判断且子任务严格只读时使用。单轮读取 [references/passive-return.md](references/passive-return.md)；双轮读取 [references/passive-session.md](references/passive-session.md)。
 
 核心限制：
 

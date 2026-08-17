@@ -17,6 +17,7 @@ STAGED_REVIEW_PATH = SKILL_DIR / "references" / "staged-review.md"
 LOG_ANALYSIS_PATH = SKILL_DIR / "references" / "log-analysis.md"
 PASSIVE_RETURN_PATH = SKILL_DIR / "references" / "passive-return.md"
 PASSIVE_SESSION_PATH = SKILL_DIR / "references" / "passive-session.md"
+CONTEXT_GATE_PATH = SKILL_DIR / "references" / "context-gate.md"
 
 LEGACY_SKILL_BYTES = 25_741
 LEGACY_ESTIMATED_TOKENS = 8_140
@@ -34,6 +35,7 @@ MAX_RETURN_CAPSULE_LINES = 10
 MAX_SESSION_CAPSULE_LINES = 18
 MAX_ROUND_DELTA_LINES = 6
 MAX_SESSION_RETURN_LINES = 10
+MAX_CONTEXT_GATE_LINES = 11
 
 
 def fenced_block(text: str, marker: str) -> str | None:
@@ -78,6 +80,7 @@ def validate_contract(
     log_analysis: str,
     passive_return: str,
     passive_session: str,
+    context_gate: str,
 ) -> tuple[list[str], dict[str, int]]:
     errors: list[str] = []
     skill_bytes = len(skill.encode("utf-8"))
@@ -87,6 +90,7 @@ def validate_contract(
     log_analysis_bytes = len(log_analysis.encode("utf-8"))
     passive_return_bytes = len(passive_return.encode("utf-8"))
     passive_session_bytes = len(passive_session.encode("utf-8"))
+    context_gate_bytes = len(context_gate.encode("utf-8"))
 
     capsule = fenced_block(capsule_reference, "DELEGATION_CAPSULE")
     report = fenced_block(capsule_reference, "STATUS: COMPLETE")
@@ -95,6 +99,7 @@ def validate_contract(
     session_capsule = fenced_block(passive_session, "SESSION_CAPSULE")
     round_delta = fenced_block(passive_session, "ROUND_DELTA")
     session_return = fenced_block(passive_session, "SESSION_RETURN_CAPSULE")
+    context_gate_block = fenced_block(context_gate, "CONTEXT_GATE")
     capsule_lines = len(capsule.splitlines()) if capsule else 0
     report_lines = len(report.splitlines()) if report else 0
     collector_capsule_lines = len(collector_capsule.splitlines()) if collector_capsule else 0
@@ -102,6 +107,7 @@ def validate_contract(
     session_capsule_lines = len(session_capsule.splitlines()) if session_capsule else 0
     round_delta_lines = len(round_delta.splitlines()) if round_delta else 0
     session_return_lines = len(session_return.splitlines()) if session_return else 0
+    context_gate_lines = len(context_gate_block.splitlines()) if context_gate_block else 0
     capsule_fields = block_fields(capsule)
     report_fields = block_fields(report)
     collector_capsule_fields = block_fields(collector_capsule)
@@ -109,6 +115,7 @@ def validate_contract(
     session_capsule_fields = block_fields(session_capsule)
     round_delta_fields = block_fields(round_delta)
     session_return_fields = block_fields(session_return)
+    context_gate_fields = block_fields(context_gate_block)
 
     metrics = {
         "skill_bytes": skill_bytes,
@@ -125,6 +132,8 @@ def validate_contract(
         "passive_return_estimated_tokens": estimate_tokens(passive_return),
         "passive_session_bytes": passive_session_bytes,
         "passive_session_estimated_tokens": estimate_tokens(passive_session),
+        "context_gate_bytes": context_gate_bytes,
+        "context_gate_estimated_tokens": estimate_tokens(context_gate),
         "capsule_lines": capsule_lines,
         "capsule_estimated_tokens": estimate_tokens(capsule or ""),
         "report_lines": report_lines,
@@ -134,6 +143,7 @@ def validate_contract(
         "session_capsule_lines": session_capsule_lines,
         "round_delta_lines": round_delta_lines,
         "session_return_lines": session_return_lines,
+        "context_gate_lines": context_gate_lines,
         "parent_review_passes": integer_setting(coordinator, "MAX_PARENT_REVIEW_PASSES") or 0,
         "parent_tool_calls": integer_setting(coordinator, "MAX_PARENT_TOOL_CALLS") or 0,
         "correction_messages": integer_setting(coordinator, "MAX_CORRECTION_MESSAGES") or 0,
@@ -158,6 +168,7 @@ def validate_contract(
         ("log-analysis.md", log_analysis_bytes),
         ("passive-return.md", passive_return_bytes),
         ("passive-session.md", passive_session_bytes),
+        ("context-gate.md", context_gate_bytes),
     ):
         if size > MAX_MODE_REFERENCE_BYTES:
             errors.append(f"{name} too large: {size} > {MAX_MODE_REFERENCE_BYTES} bytes")
@@ -200,6 +211,12 @@ def validate_contract(
         errors.append(
             f"session return too long: {session_return_lines} > "
             f"{MAX_SESSION_RETURN_LINES} lines"
+        )
+    if not context_gate_block:
+        errors.append("CONTEXT_GATE block missing")
+    elif context_gate_lines > MAX_CONTEXT_GATE_LINES:
+        errors.append(
+            f"context gate too long: {context_gate_lines} > {MAX_CONTEXT_GATE_LINES} lines"
         )
 
     expected_capsule_fields = [
@@ -319,9 +336,25 @@ def validate_contract(
     if session_return and session_return_fields != expected_session_return_fields:
         errors.append("SESSION_RETURN_CAPSULE fields changed, duplicated, missing, or reordered")
 
+    expected_context_gate_fields = [
+        "ACTIVE_MODEL",
+        "MODEL_CONTEXT_WINDOW",
+        "EFFECTIVE_CONTEXT_WINDOW",
+        "AUTO_COMPACT_LIMIT",
+        "LIMIT_SOURCE",
+        "LIMIT_VALID",
+        "CURRENT_CONTEXT",
+        "RESERVE",
+        "AUTO_COMPACT_POLICY",
+        "DECISION",
+    ]
+    if context_gate_block and context_gate_fields != expected_context_gate_fields:
+        errors.append("CONTEXT_GATE fields changed, duplicated, missing, or reordered")
+
     required_skill = (
         "## 委派准入",
         "## COST_FIRST 上下文策略",
+        "## CONTEXT_GATE",
         "## PASSIVE modes",
         "## STAGED_REVIEW",
         "## LOG_ANALYSIS profile",
@@ -334,6 +367,9 @@ def validate_contract(
         "`fork_context=false`",
         "`PASSIVE_SESSION`：最多两次 `wait_agent`、一次 `send_input`",
         "完成通知已包含最终 capsule 时直接使用",
+        "磁盘配置不证明已生效",
+        "自动压缩只防止上下文溢出，不是费用控制",
+        "当前工具面不能主动执行 `/compact`",
         "不自动改用其他模式",
         "核心协议不得依赖特定代理、供应商、价格表、本地计费数据库或 usage API",
         "`COMPACT_COORDINATOR` 只在用户明确要求旧主任务压缩后继续验收时使用",
@@ -450,6 +486,25 @@ def validate_contract(
         if value not in passive_session:
             errors.append(f"required passive session contract missing: {value}")
 
+    required_context_gate = (
+        "ACTIVE_SESSION > MODEL_CATALOG > DISK_CONFIG",
+        "LIMIT_SOURCE: DISK_ONLY",
+        "当前任务不使用该值；新任务重新验证",
+        "0 < AUTO_COMPACT_LIMIT < EFFECTIVE_CONTEXT_WINDOW",
+        "AUTO_COMPACT_LIMIT: MODEL_DERIVED",
+        "LIMIT_VALID: NO",
+        "不得依赖自动压缩",
+        "CURRENT_CONTEXT: UNKNOWN",
+        "`PASSIVE_SESSION` 返回 `CONTEXT_GAP`",
+        "AUTO_COMPACT_POLICY: RUNTIME_SAFETY_ONLY",
+        "max(32000, AUTO_COMPACT_LIMIT 的 10%)",
+        "不能主动执行 `/compact`",
+        "不修改 `config.toml`、模型目录或运行时设置",
+    )
+    for value in required_context_gate:
+        if value not in context_gate:
+            errors.append(f"required context gate contract missing: {value}")
+
     forbidden_skill = (
         "使用用户配置的运行时默认值",
         "FILE_BOUNDARIES",
@@ -469,6 +524,7 @@ def validate_contract(
             log_analysis,
             passive_return,
             passive_session,
+            context_gate,
         )
     )
     forbidden_runtime_coupling = (
@@ -502,6 +558,7 @@ def mutation_self_test(
     log_analysis: str,
     passive_return: str,
     passive_session: str,
+    context_gate: str,
 ) -> list[str]:
     failures: list[str] = []
     names = (
@@ -512,6 +569,7 @@ def mutation_self_test(
         "log_analysis",
         "passive_return",
         "passive_session",
+        "context_gate",
     )
     base = dict(
         zip(
@@ -524,6 +582,7 @@ def mutation_self_test(
                 log_analysis,
                 passive_return,
                 passive_session,
+                context_gate,
             ),
             strict=True,
         )
@@ -672,6 +731,41 @@ def mutation_self_test(
                 1,
             )
         ),
+        "disk config treated active": variant(
+            context_gate=context_gate.replace(
+                "当前任务不使用该值；新任务重新验证",
+                "当前任务直接使用磁盘值",
+                1,
+            )
+        ),
+        "invalid compact limit accepted": variant(
+            context_gate=context_gate.replace(
+                "不得依赖自动压缩",
+                "继续依赖自动压缩",
+                1,
+            )
+        ),
+        "auto compact treated as cost control": variant(
+            skill=skill.replace(
+                "自动压缩只防止上下文溢出，不是费用控制",
+                "自动压缩同时保证费用上限",
+                1,
+            )
+        ),
+        "unknown context allows session": variant(
+            context_gate=context_gate.replace(
+                "`PASSIVE_SESSION` 返回 `CONTEXT_GAP`",
+                "`PASSIVE_SESSION` 继续执行",
+                1,
+            )
+        ),
+        "automatic compact execution": variant(
+            skill=skill.replace(
+                "当前工具面不能主动执行 `/compact`",
+                "当前任务自动执行 `/compact`",
+                1,
+            )
+        ),
     }
     for name, texts in mutations.items():
         errors, _metrics = validate_contract(*texts)
@@ -705,6 +799,7 @@ def print_metrics(metrics: dict[str, int]) -> None:
         f"log:{metrics['log_analysis_estimated_tokens']} "
         f"passive:{metrics['passive_return_estimated_tokens']} "
         f"session:{metrics['passive_session_estimated_tokens']} "
+        f"context:{metrics['context_gate_estimated_tokens']} "
         f"coordinator:{metrics['coordinator_estimated_tokens']}"
     )
     print(
@@ -728,6 +823,7 @@ def print_metrics(metrics: dict[str, int]) -> None:
         f"delta:{metrics['round_delta_lines']}/{MAX_ROUND_DELTA_LINES} "
         f"return:{metrics['session_return_lines']}/{MAX_SESSION_RETURN_LINES}"
     )
+    print(f"  context_gate_lines={metrics['context_gate_lines']}/{MAX_CONTEXT_GATE_LINES}")
     print(
         "  parent_limits="
         f"review:{metrics['parent_review_passes']} "
@@ -746,6 +842,7 @@ def main() -> int:
     log_analysis = LOG_ANALYSIS_PATH.read_text(encoding="utf-8")
     passive_return = PASSIVE_RETURN_PATH.read_text(encoding="utf-8")
     passive_session = PASSIVE_SESSION_PATH.read_text(encoding="utf-8")
+    context_gate = CONTEXT_GATE_PATH.read_text(encoding="utf-8")
     errors, metrics = validate_contract(
         skill,
         coordinator,
@@ -754,6 +851,7 @@ def main() -> int:
         log_analysis,
         passive_return,
         passive_session,
+        context_gate,
     )
     errors.extend(
         mutation_self_test(
@@ -764,6 +862,7 @@ def main() -> int:
             log_analysis,
             passive_return,
             passive_session,
+            context_gate,
         )
     )
     print_metrics(metrics)
