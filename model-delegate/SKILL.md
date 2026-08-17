@@ -1,11 +1,11 @@
 ---
 name: model-delegate
-description: 为 Codex 建立低上下文成本的顶层任务分工。用于判断工作应留在当前任务、单向交接、分阶段独立审查或显式压缩协调；支持受限日志分析、读写边界、软预算和用户确认后的可选真实 E2E。
+description: 为 Codex 建立低上下文成本的任务分工。用于判断工作应留在当前任务、由用户选定的只读辅助模型被动回传、单向交接、分阶段独立审查或显式压缩协调；支持受限日志分析、软预算和用户确认后的可选真实 E2E。
 ---
 
 # 模型委派
 
-使用 Codex App 原生顶层任务。最大成本风险是旧主任务在每次唤醒时重复处理长历史，因此默认不让旧主任务等待、轮询或验收。
+使用 Codex 原生子智能体和 Codex App 顶层任务。最大成本风险是主任务反复处理长历史，因此只允许明确受限的一次性返回，禁止轮询式协调。
 
 核心协议不得依赖特定代理、供应商、价格表、本地计费数据库或 usage API。运行环境没有费用或 token 数据时，委派流程仍应正常工作。
 
@@ -24,6 +24,7 @@ description: 为 Codex 建立低上下文成本的顶层任务分工。用于判
 - 预计需要 7 次以上底层工具调用、跨多个模块或多轮执行。
 - 需要处理长日志、大型输出、依赖树或其他大产物。
 - 当前任务已有长历史，且结果可由新任务独立完成并直接报告用户。
+- 主任务仍需最终判断，但只需要一个只读证据摘要。
 
 这些数量是软判断，不是硬费用保证。高风险工作即使规模较小，也可进入 `STAGED_REVIEW`。
 
@@ -34,13 +35,14 @@ description: 为 Codex 建立低上下文成本的顶层任务分工。用于判
 | 模式 | 适用范围 | 默认行为 |
 |---|---|---|
 | `INLINE` | 未通过委派准入或范围未收敛 | 当前任务直接完成，不创建任务 |
+| `PASSIVE_RETURN` | 主任务仍需最终判断，且只需只读证据或大型输出摘要 | 创建一个无历史继承的子智能体；完成后被动返回一次；主任务继续 |
 | `HANDOFF` | 已确认、边界清楚的低风险或中风险工作 | 创建新任务；旧主任务立即结束 |
 | `STAGED_REVIEW` | 数据迁移、数据修复、认证授权、租户隔离、生产配置、并发、公共接口、不可逆操作或其他高风险工作 | 执行任务完成后输出短审查包；用户明确触发全新审查任务；旧主任务永不恢复 |
 | `COMPACT_COORDINATOR` | 用户明确要求旧主任务在 `/compact` 后继续验收 | 创建执行任务；旧主任务压缩后最多恢复一次 |
 
-默认优先级：`INLINE` > `HANDOFF` > `STAGED_REVIEW`。`COMPACT_COORDINATOR` 只在用户明确要求旧主任务压缩后继续验收时使用，不作为高风险默认模式。
+默认优先级：`INLINE` > `PASSIVE_RETURN` > `HANDOFF` > `STAGED_REVIEW`。`COMPACT_COORDINATOR` 只在用户明确要求旧主任务压缩后继续验收时使用。
 
-只读委派使用 `HANDOFF`，仍保持单任务。当前任务已很长时，普通工作使用 `HANDOFF`，高风险工作使用 `STAGED_REVIEW`。
+主任务上下文较短或中等、仍需结果时使用 `PASSIVE_RETURN`。主任务已很长时，普通工作使用 `HANDOFF`，高风险工作使用 `STAGED_REVIEW`。
 
 不要使用 `/fork` 解决上下文成本；它会复制当前聊天历史。优先创建全新任务。`create_thread` 不可用时，输出紧凑交接包，让用户通过 `/task` 开始新任务。
 
@@ -48,15 +50,17 @@ description: 为 Codex 建立低上下文成本的顶层任务分工。用于判
 
 - 只有用户显式调用本技能或明确确认委派后，才创建任务。
 - 默认最多创建一个执行任务；不得自动拆成多个任务或并发。
-- 始终使用保存项目的 `local` 环境和当前共享检出目录。
-- 不创建、切换、合并、rebase、cherry-pick 或清理 worktree。
-- 不使用子智能体协议、独立 `codex exec`、脚本编排、共享状态文件或高频轮询。
+- 顶层任务始终使用保存项目的 `local` 环境和共享检出目录，不使用 worktree。
+- `PASSIVE_RETURN` 只读子智能体不得调用 worktree 管理工具或依赖子工作区写入。
+- 只有 `PASSIVE_RETURN` 可创建一个原生只读子智能体；其他模式不使用子智能体协议。
+- 不使用独立 `codex exec`、脚本编排、共享状态文件或高频轮询。
 - 执行任务不得再创建任务，不得扩大范围。
+- `PASSIVE_RETURN` 子智能体不得写文件、继承父聊天或创建后代。
 - `STAGED_REVIEW` 的审查任务必须由用户明确触发；执行任务不得创建审查任务。
 - 不读取特定代理的数据库、日志或价格表作为核心流程前置条件。
 - `create_thread` 没有硬 token budget 参数；不要声称已设置 token 上限。
 - 当前 `create_thread` 未暴露工具调用数、运行时长、累计上下文、费用上限或任务中断参数。没有这些运行时能力时，任何提示词预算都只是软限制。
-- 用户未明确接受软预算风险时，不创建 `HANDOFF`、`STAGED_REVIEW` 或 `COMPACT_COORDINATOR` 任务；使用 `INLINE`。
+- 用户未明确接受软预算风险时，不创建任何委派；使用 `INLINE`。
 - 用户在原请求中已给出模型、effort 和软预算接受声明时，视为完成确认，不额外增加确认回合。
 
 ## 与 grill-me 联动
@@ -80,27 +84,27 @@ description: 为 Codex 建立低上下文成本的顶层任务分工。用于判
 1. 读取项目 `AGENTS.md`、相关目录规则及明确要求的技能。
 2. 记录 `PROJECT_ROOT`、分支、`BASE_COMMIT`、边界、检查和必需工具；不要假设新任务继承实时连接。
 3. 检查 `git status`；不干净时不 stash、覆盖或删除。干净后运行 `git pull --ff-only`，失败时停止。
-4. 使用 `list_projects` 确认保存项目及 `projectId`。
+4. 顶层任务模式使用 `list_projects` 确认保存项目及 `projectId`。
 
 只做一次定向发现。不要在主任务重复扫描仓库、重新读取已确认文件或执行实现级调查。
 
 ## 模型选择
 
-- 每次委派都要求用户明确确认规范模型名和 reasoning effort。未确认时停止，不调用 `create_thread`。
-- 列出当前 `create_thread` 明确接受的全部规范模型和 effort；不得依赖用户配置的默认模型。
-- 创建任务时显式传入已确认的 `model` 和 `thinking`。
+- 每次委派都要求用户明确确认规范模型名和 reasoning effort。未确认时停止。
+- 列出所选运行时工具明确接受的全部规范模型和 effort；不得依赖默认模型。
+- `PASSIVE_RETURN` 显式传入子智能体 `model` 和 `reasoning_effort`；顶层模式显式传入 `model` 和 `thinking`。
 - `max` 或 `ultra` 只在用户明确选择时使用；不得推荐为默认值，不得因任务复杂而自动提高。
 - 不从路由后缀、显示名或历史记录猜测模型。
 
 ## 交接包
 
-通过委派准入并确认模式、模型、effort 和软预算后，才读取 [references/delegation-capsule.md](references/delegation-capsule.md)。`INLINE` 不读取该文件。
+`HANDOFF`、`STAGED_REVIEW` 或 `COMPACT_COORDINATOR` 通过准入并完成确认后，才读取 [references/delegation-capsule.md](references/delegation-capsule.md)。`INLINE` 和 `PASSIVE_RETURN` 不读取该文件。
 
 创建任务前生成不超过 20 行的 `DELEGATION_CAPSULE`。创建后不重写、不扩展；读写边界、预算语义和报告压缩规则以该 reference 为准。
 
 ## LOG_ANALYSIS profile
 
-日志、测试输出、依赖树或其他大型文本证据使用 `PROFILE: LOG_ANALYSIS`，模式仍选择 `HANDOFF` 或 `STAGED_REVIEW`。选择后才读取 [references/log-analysis.md](references/log-analysis.md)。
+日志、测试输出、依赖树或其他大型文本证据使用 `PROFILE: LOG_ANALYSIS`，模式选择 `PASSIVE_RETURN`、`HANDOFF` 或 `STAGED_REVIEW`。选择后才读取 [references/log-analysis.md](references/log-analysis.md)。
 
 核心限制：
 
@@ -109,25 +113,20 @@ description: 为 Codex 建立低上下文成本的顶层任务分工。用于判
 - 不要求特定工具存在；没有安全过滤方法时返回 `TOOLING_GAP`。
 - 不在任务包或报告中传递完整原始日志。
 
+## PASSIVE_RETURN
+
+主任务仍需最终判断、当前上下文尚可继续且子任务严格只读时使用。选择后才读取 [references/passive-return.md](references/passive-return.md)。
+
+核心限制：
+
+- 使用一个原生子智能体，`fork_context=false`，显式传入用户确认的模型和 effort。
+- 主任务最多调用一次 `wait_agent`；不调用 `send_input`，不做纠偏或第二次等待。
+- 子智能体返回不超过 10 行的 `RETURN_CAPSULE`；主任务不读取原始日志或重复执行同一调查。
+- 子智能体工具不可用、超时或协议不合格时返回 `TOOLING_GAP` 或 `BLOCKED`，不自动改用其他模式。
+
 ## HANDOFF
 
-这是默认委派模式。
-
-1. 调用 `create_thread`，传入完整 capsule，使用保存项目的 `local` 环境。
-2. 执行任务直接面向用户完成实现、验证和最终报告，不向旧主任务回传。
-3. 创建成功后，旧主任务只回复任务链接、模式、目标和未验证项。
-4. 立即结束旧主任务。不得调用 `wait_threads`、`read_thread`、`list_threads` 或 `send_message_to_thread` 跟踪执行。
-5. 返回 `threadId` 时发出 `::created-thread{threadId="..."}`；仅返回 `clientThreadId` 时发出对应 `clientThreadId` 指令。
-
-执行任务必须：
-
-- 先验证 `PROJECT_ROOT`、`BASE_COMMIT`、项目规则和工作区状态。
-- 使用索引、定向读取或批量工具获取最小上下文；最多一次广域发现。
-- `TASK_KIND: READ_ONLY` 时不得修改文件、运行写操作、`git add` 或提交；报告省略 `COMMIT_ID`。
-- `TASK_KIND: WRITE` 时只修改 `WRITE_BOUNDARIES` 内文件；运行约定检查，完成前 `git add` 预期文件并提交，返回 `COMMIT_ID`。
-- 每次工具调用前更新软预算计数；达到任一软限制时停止并返回 `SOFT_BUDGET_EXHAUSTED`。
-- 低风险和中风险任务自行完成差异审查及验收。
-- 遇到阻塞或预算不足时在执行任务中直接向用户报告，不唤醒旧主任务。
+这是默认顶层委派模式。生命周期、执行边界和报告格式见 [references/delegation-capsule.md](references/delegation-capsule.md)。创建后旧主任务立即结束，不等待、不读取、不发送消息跟踪执行。
 
 ## INLINE
 
@@ -164,28 +163,10 @@ description: 为 Codex 建立低上下文成本的顶层任务分工。用于判
 - 用户压缩并明确要求继续验收后，旧主任务最多调用一次 `wait_threads`、一次定向审查、一次纠偏。
 - 无法确认已压缩时，不恢复协调；改用新的独立审查任务。
 
-## 执行任务报告
-
-报告不超过 12 行：
-
-```text
-STATUS: COMPLETE | BLOCKED | SOFT_BUDGET_EXHAUSTED
-DELEGATION_KEY: 原样回显
-TASK_KIND: READ_ONLY | WRITE
-RESULT: 完成内容
-COMMIT_ID: 写任务提交；只读任务省略
-FILES: 修改或检查的文件
-CHECKS: 命令和简短结果
-TOOLS_USED: 实际使用的关键工具
-TOOLING_GAPS: 缺失工具及影响
-RISKS: 未验证项
-```
-
-不要附完整日志、完整 diff、重复 capsule 或逐文件叙述。
-
 ## 失败策略
 
 - `create_thread` 不可用：输出 capsule，让用户用 `/task` 创建新任务；不得改用 `/fork`。
+- 原生子智能体工具不可用：`PASSIVE_RETURN` 返回 `TOOLING_GAP`；未经用户决定不自动改用顶层任务。
 - 必需工具缺失：返回 `TOOLING_GAP`；影响安全或验收时停止。
 - 发现范围扩展：返回 `BLOCKED`，不自动增加任务。
 - 用户未确认模型、effort 或软预算风险：使用 `INLINE`，不创建任务。

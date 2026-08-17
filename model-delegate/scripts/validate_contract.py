@@ -15,6 +15,7 @@ COORDINATOR_PATH = SKILL_DIR / "references" / "compact-coordinator.md"
 CAPSULE_PATH = SKILL_DIR / "references" / "delegation-capsule.md"
 STAGED_REVIEW_PATH = SKILL_DIR / "references" / "staged-review.md"
 LOG_ANALYSIS_PATH = SKILL_DIR / "references" / "log-analysis.md"
+PASSIVE_RETURN_PATH = SKILL_DIR / "references" / "passive-return.md"
 
 LEGACY_SKILL_BYTES = 25_741
 LEGACY_ESTIMATED_TOKENS = 8_140
@@ -27,6 +28,8 @@ MAX_COORDINATOR_BYTES = 5_000
 MAX_MODE_REFERENCE_BYTES = 6_000
 MAX_CAPSULE_LINES = 20
 MAX_REPORT_LINES = 12
+MAX_COLLECTOR_CAPSULE_LINES = 16
+MAX_RETURN_CAPSULE_LINES = 10
 
 
 def fenced_block(text: str, marker: str) -> str | None:
@@ -69,6 +72,7 @@ def validate_contract(
     capsule_reference: str,
     staged_review: str,
     log_analysis: str,
+    passive_return: str,
 ) -> tuple[list[str], dict[str, int]]:
     errors: list[str] = []
     skill_bytes = len(skill.encode("utf-8"))
@@ -76,13 +80,20 @@ def validate_contract(
     capsule_reference_bytes = len(capsule_reference.encode("utf-8"))
     staged_review_bytes = len(staged_review.encode("utf-8"))
     log_analysis_bytes = len(log_analysis.encode("utf-8"))
+    passive_return_bytes = len(passive_return.encode("utf-8"))
 
     capsule = fenced_block(capsule_reference, "DELEGATION_CAPSULE")
-    report = fenced_block(skill, "STATUS: COMPLETE")
+    report = fenced_block(capsule_reference, "STATUS: COMPLETE")
+    collector_capsule = fenced_block(passive_return, "COLLECTOR_CAPSULE")
+    return_capsule = fenced_block(passive_return, "RETURN_CAPSULE")
     capsule_lines = len(capsule.splitlines()) if capsule else 0
     report_lines = len(report.splitlines()) if report else 0
+    collector_capsule_lines = len(collector_capsule.splitlines()) if collector_capsule else 0
+    return_capsule_lines = len(return_capsule.splitlines()) if return_capsule else 0
     capsule_fields = block_fields(capsule)
     report_fields = block_fields(report)
+    collector_capsule_fields = block_fields(collector_capsule)
+    return_capsule_fields = block_fields(return_capsule)
 
     metrics = {
         "skill_bytes": skill_bytes,
@@ -95,10 +106,14 @@ def validate_contract(
         "staged_review_estimated_tokens": estimate_tokens(staged_review),
         "log_analysis_bytes": log_analysis_bytes,
         "log_analysis_estimated_tokens": estimate_tokens(log_analysis),
+        "passive_return_bytes": passive_return_bytes,
+        "passive_return_estimated_tokens": estimate_tokens(passive_return),
         "capsule_lines": capsule_lines,
         "capsule_estimated_tokens": estimate_tokens(capsule or ""),
         "report_lines": report_lines,
         "report_estimated_tokens": estimate_tokens(report or ""),
+        "collector_capsule_lines": collector_capsule_lines,
+        "return_capsule_lines": return_capsule_lines,
         "parent_review_passes": integer_setting(coordinator, "MAX_PARENT_REVIEW_PASSES") or 0,
         "parent_tool_calls": integer_setting(coordinator, "MAX_PARENT_TOOL_CALLS") or 0,
         "correction_messages": integer_setting(coordinator, "MAX_CORRECTION_MESSAGES") or 0,
@@ -121,6 +136,7 @@ def validate_contract(
         ("delegation-capsule.md", capsule_reference_bytes),
         ("staged-review.md", staged_review_bytes),
         ("log-analysis.md", log_analysis_bytes),
+        ("passive-return.md", passive_return_bytes),
     ):
         if size > MAX_MODE_REFERENCE_BYTES:
             errors.append(f"{name} too large: {size} > {MAX_MODE_REFERENCE_BYTES} bytes")
@@ -132,6 +148,20 @@ def validate_contract(
         errors.append("execution report block missing")
     elif report_lines > MAX_REPORT_LINES:
         errors.append(f"report template too long: {report_lines} > {MAX_REPORT_LINES} lines")
+    if not collector_capsule:
+        errors.append("COLLECTOR_CAPSULE block missing")
+    elif collector_capsule_lines > MAX_COLLECTOR_CAPSULE_LINES:
+        errors.append(
+            f"collector capsule too long: {collector_capsule_lines} > "
+            f"{MAX_COLLECTOR_CAPSULE_LINES} lines"
+        )
+    if not return_capsule:
+        errors.append("RETURN_CAPSULE block missing")
+    elif return_capsule_lines > MAX_RETURN_CAPSULE_LINES:
+        errors.append(
+            f"return capsule too long: {return_capsule_lines} > "
+            f"{MAX_RETURN_CAPSULE_LINES} lines"
+        )
 
     expected_capsule_fields = [
         "MODE",
@@ -171,16 +201,55 @@ def validate_contract(
     if report and report_fields != expected_report_fields:
         errors.append("execution report fields changed, duplicated, missing, or reordered")
 
+    expected_collector_fields = [
+        "MODE",
+        "DELEGATION_KEY",
+        "MODEL",
+        "QUERY",
+        "INPUT_LOCATION",
+        "TIME_RANGE",
+        "EVIDENCE_FIELDS",
+        "READ_BOUNDARIES",
+        "RULES_AND_TOOLING",
+        "FORK_CONTEXT",
+        "LIMITS",
+        "RAW_LOG_OUTPUT",
+        "CLEANUP_POLICY",
+        "STOP_RULE",
+        "RETURN_PROFILE",
+    ]
+    if collector_capsule and collector_capsule_fields != expected_collector_fields:
+        errors.append("COLLECTOR_CAPSULE fields changed, duplicated, missing, or reordered")
+
+    expected_return_fields = [
+        "STATUS",
+        "DELEGATION_KEY",
+        "QUERY",
+        "RESULT",
+        "EVIDENCE",
+        "TOOLING_GAPS",
+        "UNVERIFIED",
+        "RISKS",
+        "NEXT_ACTION",
+    ]
+    if return_capsule and return_capsule_fields != expected_return_fields:
+        errors.append("RETURN_CAPSULE fields changed, duplicated, missing, or reordered")
+
     required_skill = (
         "## 委派准入",
         "## COST_FIRST 上下文策略",
+        "## PASSIVE_RETURN",
         "## STAGED_REVIEW",
         "## LOG_ANALYSIS profile",
         "每次委派都要求用户明确确认规范模型名和 reasoning effort",
         "HARD_BUDGET_UNAVAILABLE",
-        "报告不超过 12 行",
-        "不得调用 `wait_threads`、`read_thread`、`list_threads` 或 `send_message_to_thread`",
         "执行任务不得再创建任务",
+        "只有 `PASSIVE_RETURN` 可创建一个原生只读子智能体",
+        "顶层任务始终使用保存项目的 `local` 环境和共享检出目录，不使用 worktree",
+        "`PASSIVE_RETURN` 只读子智能体不得调用 worktree 管理工具或依赖子工作区写入",
+        "`fork_context=false`",
+        "最多调用一次 `wait_agent`",
+        "不自动改用其他模式",
         "核心协议不得依赖特定代理、供应商、价格表、本地计费数据库或 usage API",
         "`COMPACT_COORDINATOR` 只在用户明确要求旧主任务压缩后继续验收时使用",
         "真实委派 E2E 仅在用户明确确认后运行",
@@ -200,6 +269,10 @@ def validate_contract(
         "COST_CONTROL: SOFT; USER_ACCEPTED=YES",
         "HARD_LIMITS_UNAVAILABLE",
         "OUTPUT_PROFILE: TERSE_SAFE",
+        "one_field_per_line=YES",
+        "READ_ONLY_OMIT_COMMIT_ID=YES",
+        "报告不超过 12 行",
+        "不调用 `wait_threads`、`read_thread`、`list_threads` 或 `send_message_to_thread`",
     )
     for value in required_capsule:
         if value not in capsule_reference:
@@ -243,6 +316,29 @@ def validate_contract(
         if value not in log_analysis:
             errors.append(f"required log analysis contract missing: {value}")
 
+    required_passive_return = (
+        "TASK_KIND: READ_ONLY",
+        "FORK_CONTEXT: false",
+        "children=1",
+        "scans=1",
+        "waits=1",
+        "parent_resumes=1",
+        "corrections=0",
+        "RAW_LOG_OUTPUT: FORBIDDEN",
+        "CLEANUP_POLICY: DEFER_TO_PARENT_SESSION_END",
+        "fork_context=false",
+        "不得调用 `send_input`",
+        "不得第二次调用 `wait_agent`",
+        "不在返回路径调用 `close_agent`",
+        "RETURN_CAPSULE",
+        "协议不合格、包含原始日志或超过 10 行时返回 `BLOCKED`",
+        "不得重新读取原始日志、重复同一调查或要求子智能体重述",
+        "高风险结论只作为输入，后续使用 `STAGED_REVIEW`",
+    )
+    for value in required_passive_return:
+        if value not in passive_return:
+            errors.append(f"required passive return contract missing: {value}")
+
     forbidden_skill = (
         "使用用户配置的运行时默认值",
         "FILE_BOUNDARIES",
@@ -254,7 +350,7 @@ def validate_contract(
             errors.append(f"forbidden legacy contract present: {value}")
 
     all_contract_text = "\n".join(
-        (skill, coordinator, capsule_reference, staged_review, log_analysis)
+        (skill, coordinator, capsule_reference, staged_review, log_analysis, passive_return)
     )
     forbidden_runtime_coupling = (
         ".cc-switch",
@@ -285,6 +381,7 @@ def mutation_self_test(
     capsule_reference: str,
     staged_review: str,
     log_analysis: str,
+    passive_return: str,
 ) -> list[str]:
     failures: list[str] = []
     mutations = {
@@ -294,6 +391,7 @@ def mutation_self_test(
             capsule_reference.replace("TASK_KIND: READ_ONLY | WRITE", ""),
             staged_review,
             log_analysis,
+            passive_return,
         ),
         "runtime default model": (
             skill + "\n用户未指定时使用用户配置的运行时默认值。\n",
@@ -301,13 +399,15 @@ def mutation_self_test(
             capsule_reference,
             staged_review,
             log_analysis,
+            passive_return,
         ),
         "verbose report": (
-            skill.replace("报告不超过 12 行", "报告不超过 20 行", 1),
+            skill,
             coordinator,
-            capsule_reference,
+            capsule_reference.replace("报告不超过 12 行", "报告不超过 20 行", 1),
             staged_review,
             log_analysis,
+            passive_return,
         ),
         "unbounded parent review": (
             skill,
@@ -315,6 +415,7 @@ def mutation_self_test(
             capsule_reference,
             staged_review,
             log_analysis,
+            passive_return,
         ),
         "missing delegation gate": (
             skill.replace("## 委派准入", "", 1),
@@ -322,6 +423,7 @@ def mutation_self_test(
             capsule_reference,
             staged_review,
             log_analysis,
+            passive_return,
         ),
         "automatic fresh reviewer": (
             skill,
@@ -329,6 +431,7 @@ def mutation_self_test(
             capsule_reference,
             staged_review.replace("执行任务不得创建审查任务", "执行任务创建审查任务", 1),
             log_analysis,
+            passive_return,
         ),
         "raw log output allowed": (
             skill,
@@ -336,6 +439,7 @@ def mutation_self_test(
             capsule_reference,
             staged_review,
             log_analysis.replace("RAW_LOG_OUTPUT: FORBIDDEN", "RAW_LOG_OUTPUT: ALLOWED", 1),
+            passive_return,
         ),
         "provider runtime dependency": (
             skill + "\n读取 ~/.cc-switch/cc-switch.db 计算费用。\n",
@@ -343,6 +447,7 @@ def mutation_self_test(
             capsule_reference,
             staged_review,
             log_analysis,
+            passive_return,
         ),
         "automatic live e2e": (
             skill.replace(
@@ -354,6 +459,7 @@ def mutation_self_test(
             capsule_reference,
             staged_review,
             log_analysis,
+            passive_return,
         ),
         "duplicate capsule field": (
             skill,
@@ -361,6 +467,7 @@ def mutation_self_test(
             capsule_reference.replace("INPUTS:", "SCOPE:", 1),
             staged_review,
             log_analysis,
+            passive_return,
         ),
         "coordinator restored as default": (
             skill.replace(
@@ -372,6 +479,83 @@ def mutation_self_test(
             capsule_reference,
             staged_review,
             log_analysis,
+            passive_return,
+        ),
+        "read-only commit id restored": (
+            skill,
+            coordinator,
+            capsule_reference.replace(
+                "READ_ONLY_OMIT_COMMIT_ID=YES",
+                "READ_ONLY_OMIT_COMMIT_ID=NO",
+                1,
+            ),
+            staged_review,
+            log_analysis,
+            passive_return,
+        ),
+        "passive return write enabled": (
+            skill,
+            coordinator,
+            capsule_reference,
+            staged_review,
+            log_analysis,
+            passive_return.replace("TASK_KIND: READ_ONLY", "TASK_KIND: WRITE", 1),
+        ),
+        "passive context inherited": (
+            skill,
+            coordinator,
+            capsule_reference,
+            staged_review,
+            log_analysis,
+            passive_return.replace("FORK_CONTEXT: false", "FORK_CONTEXT: true", 1),
+        ),
+        "multiple passive children": (
+            skill,
+            coordinator,
+            capsule_reference,
+            staged_review,
+            log_analysis,
+            passive_return.replace("children=1", "children=2", 1),
+        ),
+        "multiple passive waits": (
+            skill,
+            coordinator,
+            capsule_reference,
+            staged_review,
+            log_analysis,
+            passive_return.replace("waits=1", "waits=2", 1),
+        ),
+        "passive correction enabled": (
+            skill,
+            coordinator,
+            capsule_reference,
+            staged_review,
+            log_analysis,
+            passive_return.replace("corrections=0", "corrections=1", 1),
+        ),
+        "passive raw logs allowed": (
+            skill,
+            coordinator,
+            capsule_reference,
+            staged_review,
+            log_analysis,
+            passive_return.replace("RAW_LOG_OUTPUT: FORBIDDEN", "RAW_LOG_OUTPUT: ALLOWED", 1),
+        ),
+        "passive automatic fallback": (
+            skill.replace("不自动改用其他模式", "自动改用 HANDOFF", 1),
+            coordinator,
+            capsule_reference,
+            staged_review,
+            log_analysis,
+            passive_return,
+        ),
+        "parent rereads raw logs": (
+            skill,
+            coordinator,
+            capsule_reference,
+            staged_review,
+            log_analysis,
+            passive_return.replace("不得重新读取原始日志", "重新读取原始日志", 1),
         ),
     }
     for name, texts in mutations.items():
@@ -404,6 +588,7 @@ def print_metrics(metrics: dict[str, int]) -> None:
         f"capsule:{metrics['capsule_reference_estimated_tokens']} "
         f"staged:{metrics['staged_review_estimated_tokens']} "
         f"log:{metrics['log_analysis_estimated_tokens']} "
+        f"passive:{metrics['passive_return_estimated_tokens']} "
         f"coordinator:{metrics['coordinator_estimated_tokens']}"
     )
     print(
@@ -415,6 +600,11 @@ def print_metrics(metrics: dict[str, int]) -> None:
         f"  report_lines={metrics['report_lines']} "
         f"(legacy={LEGACY_REPORT_LINES}, max={MAX_REPORT_LINES}, "
         f"estimated_tokens={metrics['report_estimated_tokens']})"
+    )
+    print(
+        "  passive_capsules="
+        f"collector:{metrics['collector_capsule_lines']}/{MAX_COLLECTOR_CAPSULE_LINES} "
+        f"return:{metrics['return_capsule_lines']}/{MAX_RETURN_CAPSULE_LINES}"
     )
     print(
         "  parent_limits="
@@ -432,12 +622,14 @@ def main() -> int:
     capsule_reference = CAPSULE_PATH.read_text(encoding="utf-8")
     staged_review = STAGED_REVIEW_PATH.read_text(encoding="utf-8")
     log_analysis = LOG_ANALYSIS_PATH.read_text(encoding="utf-8")
+    passive_return = PASSIVE_RETURN_PATH.read_text(encoding="utf-8")
     errors, metrics = validate_contract(
         skill,
         coordinator,
         capsule_reference,
         staged_review,
         log_analysis,
+        passive_return,
     )
     errors.extend(
         mutation_self_test(
@@ -446,6 +638,7 @@ def main() -> int:
             capsule_reference,
             staged_review,
             log_analysis,
+            passive_return,
         )
     )
     print_metrics(metrics)
