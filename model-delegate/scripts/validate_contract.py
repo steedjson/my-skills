@@ -35,7 +35,8 @@ MAX_RETURN_CAPSULE_LINES = 10
 MAX_SESSION_CAPSULE_LINES = 18
 MAX_ROUND_DELTA_LINES = 6
 MAX_SESSION_RETURN_LINES = 10
-MAX_CONTEXT_GATE_LINES = 11
+MAX_CONTEXT_POLICY_LINES = 11
+MAX_CONTEXT_GATE_LINES = 15
 
 
 def fenced_block(text: str, marker: str) -> str | None:
@@ -100,6 +101,7 @@ def validate_contract(
     round_delta = fenced_block(passive_session, "ROUND_DELTA")
     session_return = fenced_block(passive_session, "SESSION_RETURN_CAPSULE")
     context_gate_block = fenced_block(context_gate, "CONTEXT_GATE")
+    context_policy_block = fenced_block(context_gate, "CONTEXT_POLICY")
     capsule_lines = len(capsule.splitlines()) if capsule else 0
     report_lines = len(report.splitlines()) if report else 0
     collector_capsule_lines = len(collector_capsule.splitlines()) if collector_capsule else 0
@@ -108,6 +110,7 @@ def validate_contract(
     round_delta_lines = len(round_delta.splitlines()) if round_delta else 0
     session_return_lines = len(session_return.splitlines()) if session_return else 0
     context_gate_lines = len(context_gate_block.splitlines()) if context_gate_block else 0
+    context_policy_lines = len(context_policy_block.splitlines()) if context_policy_block else 0
     capsule_fields = block_fields(capsule)
     report_fields = block_fields(report)
     collector_capsule_fields = block_fields(collector_capsule)
@@ -116,6 +119,7 @@ def validate_contract(
     round_delta_fields = block_fields(round_delta)
     session_return_fields = block_fields(session_return)
     context_gate_fields = block_fields(context_gate_block)
+    context_policy_fields = block_fields(context_policy_block)
 
     metrics = {
         "skill_bytes": skill_bytes,
@@ -144,6 +148,7 @@ def validate_contract(
         "round_delta_lines": round_delta_lines,
         "session_return_lines": session_return_lines,
         "context_gate_lines": context_gate_lines,
+        "context_policy_lines": context_policy_lines,
         "parent_review_passes": integer_setting(coordinator, "MAX_PARENT_REVIEW_PASSES") or 0,
         "parent_tool_calls": integer_setting(coordinator, "MAX_PARENT_TOOL_CALLS") or 0,
         "correction_messages": integer_setting(coordinator, "MAX_CORRECTION_MESSAGES") or 0,
@@ -217,6 +222,13 @@ def validate_contract(
     elif context_gate_lines > MAX_CONTEXT_GATE_LINES:
         errors.append(
             f"context gate too long: {context_gate_lines} > {MAX_CONTEXT_GATE_LINES} lines"
+        )
+    if not context_policy_block:
+        errors.append("CONTEXT_POLICY block missing")
+    elif context_policy_lines > MAX_CONTEXT_POLICY_LINES:
+        errors.append(
+            f"context policy too long: {context_policy_lines} > "
+            f"{MAX_CONTEXT_POLICY_LINES} lines"
         )
 
     expected_capsule_fields = [
@@ -341,15 +353,34 @@ def validate_contract(
         "MODEL_CONTEXT_WINDOW",
         "EFFECTIVE_CONTEXT_WINDOW",
         "AUTO_COMPACT_LIMIT",
+        "COST_CLIFF_TOKENS",
+        "CONTEXT_BASE",
         "LIMIT_SOURCE",
         "LIMIT_VALID",
         "CURRENT_CONTEXT",
+        "CONTEXT_RATIO",
+        "SAMPLE_AGE_TURNS",
         "RESERVE",
         "AUTO_COMPACT_POLICY",
         "DECISION",
     ]
     if context_gate_block and context_gate_fields != expected_context_gate_fields:
         errors.append("CONTEXT_GATE fields changed, duplicated, missing, or reordered")
+
+    expected_context_policy_fields = [
+        "PERCENT_BASE",
+        "PASSIVE_SESSION_MAX_PERCENT",
+        "PASSIVE_RETURN_MAX_PERCENT",
+        "HANDOFF_PERCENT",
+        "COMPACTION_CHECKPOINT_PERCENT",
+        "HYSTERESIS_PERCENT",
+        "MIN_RESERVE_TOKENS",
+        "CONTEXT_SAMPLE_MAX_AGE",
+        "AUTO_COMPACT_POLICY",
+        "ENFORCEMENT",
+    ]
+    if context_policy_block and context_policy_fields != expected_context_policy_fields:
+        errors.append("CONTEXT_POLICY fields changed, duplicated, missing, or reordered")
 
     required_skill = (
         "## 委派准入",
@@ -368,7 +399,7 @@ def validate_contract(
         "`PASSIVE_SESSION`：最多两次 `wait_agent`、一次 `send_input`",
         "完成通知已包含最终 capsule 时直接使用",
         "磁盘配置不证明已生效",
-        "自动压缩只防止上下文溢出，不是费用控制",
+        "自动压缩只防溢出，不保费用",
         "当前工具面不能主动执行 `/compact`",
         "不自动改用其他模式",
         "核心协议不得依赖特定代理、供应商、价格表、本地计费数据库或 usage API",
@@ -487,6 +518,21 @@ def validate_contract(
             errors.append(f"required passive session contract missing: {value}")
 
     required_context_gate = (
+        "PERCENT_BASE: EFFECTIVE_LIMIT",
+        "PASSIVE_SESSION_MAX_PERCENT: 40",
+        "PASSIVE_RETURN_MAX_PERCENT: 55",
+        "HANDOFF_PERCENT: 70",
+        "COMPACTION_CHECKPOINT_PERCENT: 85",
+        "HYSTERESIS_PERCENT: 5",
+        "MIN_RESERVE_TOKENS: 32000",
+        "CONTEXT_SAMPLE_MAX_AGE: 1",
+        "ENFORCEMENT: SOFT",
+        "0 < PASSIVE_SESSION_MAX_PERCENT",
+        "PASSIVE_SESSION_MAX_PERCENT < PASSIVE_RETURN_MAX_PERCENT",
+        "PASSIVE_RETURN_MAX_PERCENT < HANDOFF_PERCENT",
+        "HANDOFF_PERCENT < COMPACTION_CHECKPOINT_PERCENT",
+        "COMPACTION_CHECKPOINT_PERCENT < 100",
+        "CONTEXT_POLICY_INVALID",
         "ACTIVE_SESSION > MODEL_CATALOG > DISK_CONFIG",
         "LIMIT_SOURCE: DISK_ONLY",
         "当前任务不使用该值；新任务重新验证",
@@ -497,7 +543,21 @@ def validate_contract(
         "CURRENT_CONTEXT: UNKNOWN",
         "`PASSIVE_SESSION` 返回 `CONTEXT_GAP`",
         "AUTO_COMPACT_POLICY: RUNTIME_SAFETY_ONLY",
-        "max(32000, AUTO_COMPACT_LIMIT 的 10%)",
+        "CONTEXT_BASE: min(EFFECTIVE_CONTEXT_WINDOW, 有效 AUTO_COMPACT_LIMIT, 已知 COST_CLIFF_TOKENS)",
+        "COST_CLIFF_TOKENS: 运行时明确值或 UNKNOWN",
+        "CURRENT_CONTEXT: 当前上下文 token 或 UNKNOWN",
+        "last_token_usage.input_tokens",
+        "缓存输入仍占上下文，不得扣除",
+        "RESERVE = max(MIN_RESERVE_TOKENS, CONTEXT_BASE 的 10%)",
+        "SAMPLE_AGE_TURNS: 0 | 1 | STALE | UNKNOWN",
+        "超过 `CONTEXT_SAMPLE_MAX_AGE` 标记 `STALE`",
+        "compaction 后必须重新读取 active session",
+        "`CONTEXT_RATIO < 40%`",
+        "`40% <= CONTEXT_RATIO < 55%`",
+        "`55% <= CONTEXT_RATIO < 70%`",
+        "`70% <= CONTEXT_RATIO < 85%`",
+        "`CONTEXT_RATIO >= 85%`",
+        "应用 5% hysteresis",
         "不能主动执行 `/compact`",
         "不修改 `config.toml`、模型目录或运行时设置",
     )
@@ -747,7 +807,7 @@ def mutation_self_test(
         ),
         "auto compact treated as cost control": variant(
             skill=skill.replace(
-                "自动压缩只防止上下文溢出，不是费用控制",
+                "自动压缩只防溢出，不保费用",
                 "自动压缩同时保证费用上限",
                 1,
             )
@@ -763,6 +823,55 @@ def mutation_self_test(
             skill=skill.replace(
                 "当前工具面不能主动执行 `/compact`",
                 "当前任务自动执行 `/compact`",
+                1,
+            )
+        ),
+        "invalid percentage ordering": variant(
+            context_gate=context_gate.replace(
+                "PASSIVE_RETURN_MAX_PERCENT: 55",
+                "PASSIVE_RETURN_MAX_PERCENT: 35",
+                1,
+            )
+        ),
+        "cumulative token usage": variant(
+            context_gate=context_gate.replace(
+                "last_token_usage.input_tokens",
+                "total_token_usage.total_tokens",
+                1,
+            )
+        ),
+        "cached input deducted": variant(
+            context_gate=context_gate.replace(
+                "缓存输入仍占上下文，不得扣除",
+                "缓存输入从上下文扣除",
+                1,
+            )
+        ),
+        "stale sample accepted": variant(
+            context_gate=context_gate.replace(
+                "超过 `CONTEXT_SAMPLE_MAX_AGE` 标记 `STALE`",
+                "过期样本继续使用",
+                1,
+            )
+        ),
+        "context base uses maximum": variant(
+            context_gate=context_gate.replace(
+                "CONTEXT_BASE: min(EFFECTIVE_CONTEXT_WINDOW, 有效 AUTO_COMPACT_LIMIT, 已知 COST_CLIFF_TOKENS)",
+                "CONTEXT_BASE: max(EFFECTIVE_CONTEXT_WINDOW, AUTO_COMPACT_LIMIT)",
+                1,
+            )
+        ),
+        "hysteresis removed": variant(
+            context_gate=context_gate.replace(
+                "HYSTERESIS_PERCENT: 5",
+                "HYSTERESIS_PERCENT: 0",
+                1,
+            )
+        ),
+        "cost cliff guessed": variant(
+            context_gate=context_gate.replace(
+                "COST_CLIFF_TOKENS: 运行时明确值或 UNKNOWN",
+                "COST_CLIFF_TOKENS: 根据模型名称猜测",
                 1,
             )
         ),
@@ -823,7 +932,11 @@ def print_metrics(metrics: dict[str, int]) -> None:
         f"delta:{metrics['round_delta_lines']}/{MAX_ROUND_DELTA_LINES} "
         f"return:{metrics['session_return_lines']}/{MAX_SESSION_RETURN_LINES}"
     )
-    print(f"  context_gate_lines={metrics['context_gate_lines']}/{MAX_CONTEXT_GATE_LINES}")
+    print(
+        "  context_policy="
+        f"{metrics['context_policy_lines']}/{MAX_CONTEXT_POLICY_LINES} "
+        f"gate:{metrics['context_gate_lines']}/{MAX_CONTEXT_GATE_LINES}"
+    )
     print(
         "  parent_limits="
         f"review:{metrics['parent_review_passes']} "

@@ -99,9 +99,9 @@ description: 为 Codex 建立自动压缩感知的低上下文成本任务分工
 
 ## CONTEXT_GATE
 
-被动模式或主任务历史明显较长时，先读取 [references/context-gate.md](references/context-gate.md)。只使用当前 session 和当前模型的运行时证据；磁盘配置不证明已生效。
+被动模式或主任务历史较长时读取 [references/context-gate.md](references/context-gate.md)。它使用当前 session 证据和用户百分比策略；磁盘配置不证明已生效。
 
-自动压缩只防止上下文溢出，不是费用控制。阈值无效、当前上下文接近阈值或信息不足时，不启动 `PASSIVE_SESSION`；输出 checkpoint 或使用 `HANDOFF`。当前工具面不能主动执行 `/compact`。
+自动压缩只防溢出，不保费用。策略无效、样本过期、上下文未知或接近阈值时限制被动模式；当前工具面不能主动执行 `/compact`。
 
 ## 交接包
 

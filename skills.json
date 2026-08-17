@@ -25,7 +25,7 @@
     {
       "name": "model-delegate",
       "category": "models-and-routing",
-      "description": "Auto-compaction-aware Codex delegation with context gating, one-shot and two-round passive read-only modes, top-level handoff, staged review, and optional live E2E",
+      "description": "Auto-compaction-aware Codex delegation with percentage context gating, passive read-only modes, top-level handoff, staged review, and optional live E2E",
       "files": [
         "SKILL.md",
         "references/compact-coordinator.md",
