@@ -1,10 +1,10 @@
 # Compact Coordinator
 
-仅 `COMPACT_COORDINATOR` 模式读取本文件。
+仅用户明确选择 `COMPACT_COORDINATOR` 模式时读取本文件。高风险任务默认使用 `STAGED_REVIEW`，不恢复旧主任务。
 
 ## 目标
 
-高风险任务保留独立验收，同时避免旧主任务在执行期间反复处理完整历史。旧主任务只允许两个活跃阶段：
+用户明确要求旧主任务继续验收时，避免其在执行期间反复处理完整历史。旧主任务只允许两个活跃阶段：
 
 1. 委派前生成 capsule 并创建执行任务。
 2. 用户执行 `/compact` 后进行一次最终验收。
@@ -85,7 +85,7 @@ checkpoint 不超过 15 行。不要重复 capsule、日志或方案讨论。
 
 ## 独立审查替代
 
-压缩状态无法确认、旧主任务仍明显过长，或用户不愿继续使用旧任务时，不恢复协调。输出不超过 15 行的 `REVIEW_CAPSULE`：
+压缩状态无法确认、旧主任务仍明显过长，或用户不愿继续使用旧任务时，不恢复协调。改用 [staged-review.md](staged-review.md) 的用户触发全新审查流程。输出不超过 15 行的 `REVIEW_CAPSULE`：
 
 ```text
 REVIEW_CAPSULE

@@ -25,10 +25,13 @@
     {
       "name": "model-delegate",
       "category": "models-and-routing",
-      "description": "Low-context Codex delegation with explicit model selection, read/write contracts, and fail-closed budget controls",
+      "description": "Portable low-context Codex delegation with admission gating, staged review, bounded log analysis, and user-approved live E2E",
       "files": [
         "SKILL.md",
         "references/compact-coordinator.md",
+        "references/delegation-capsule.md",
+        "references/log-analysis.md",
+        "references/staged-review.md",
         "scripts/validate_contract.py"
       ]
     },

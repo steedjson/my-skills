@@ -1,11 +1,31 @@
 ---
 name: model-delegate
-description: 为 Codex 建立低上下文成本的任务分工。用于把已确认、边界清楚的工作交给新的 Codex App 顶层任务，默认单向交接并结束旧主任务；明确区分只读和写任务，并在运行面缺少硬费用熔断时先取得软预算风险确认。
+description: 为 Codex 建立低上下文成本的顶层任务分工。用于判断工作应留在当前任务、单向交接、分阶段独立审查或显式压缩协调；支持受限日志分析、读写边界、软预算和用户确认后的可选真实 E2E。
 ---
 
 # 模型委派
 
 使用 Codex App 原生顶层任务。最大成本风险是旧主任务在每次唤醒时重复处理长历史，因此默认不让旧主任务等待、轮询或验收。
+
+核心协议不得依赖特定代理、供应商、价格表、本地计费数据库或 usage API。运行环境没有费用或 token 数据时，委派流程仍应正常工作。
+
+## 委派准入
+
+先判断是否值得创建新顶层任务。
+
+以下情况使用 `INLINE`：
+
+- 预计不超过 6 次底层工具调用、3 个文件，且无大日志或大型产物。
+- 计划、普通审计、信息收集、小修正，或范围仍未收敛。
+- 创建任务成本高于工作本身，或共享检出目录状态不安全。
+
+用户明确要求且满足以下任一条件时才考虑委派：
+
+- 预计需要 7 次以上底层工具调用、跨多个模块或多轮执行。
+- 需要处理长日志、大型输出、依赖树或其他大产物。
+- 当前任务已有长历史，且结果可由新任务独立完成并直接报告用户。
+
+这些数量是软判断，不是硬费用保证。高风险工作即使规模较小，也可进入 `STAGED_REVIEW`。
 
 ## 模式选择
 
@@ -13,13 +33,14 @@ description: 为 Codex 建立低上下文成本的任务分工。用于把已确
 
 | 模式 | 适用范围 | 默认行为 |
 |---|---|---|
-| `INLINE` | 计划、方案整理、普通审计、信息收集、小修正 | 当前任务直接完成，不创建任务 |
-| `HANDOFF` | 已确认、边界清楚的低风险或中风险工作 | 用户确认模型、effort 和软预算风险后创建新任务；旧主任务立即结束 |
-| `COMPACT_COORDINATOR` | 数据库迁移、数据修复、认证授权、租户隔离、生产配置、并发、公共接口、不可逆操作，或用户明确要求独立验收 | 创建执行任务；旧主任务先暂停，用户执行 `/compact` 后最多恢复一次验收 |
+| `INLINE` | 未通过委派准入或范围未收敛 | 当前任务直接完成，不创建任务 |
+| `HANDOFF` | 已确认、边界清楚的低风险或中风险工作 | 创建新任务；旧主任务立即结束 |
+| `STAGED_REVIEW` | 数据迁移、数据修复、认证授权、租户隔离、生产配置、并发、公共接口、不可逆操作或其他高风险工作 | 执行任务完成后输出短审查包；用户明确触发全新审查任务；旧主任务永不恢复 |
+| `COMPACT_COORDINATOR` | 用户明确要求旧主任务在 `/compact` 后继续验收 | 创建执行任务；旧主任务压缩后最多恢复一次 |
 
-默认优先级：`INLINE` > `HANDOFF` > `COMPACT_COORDINATOR`。不要因工具可用而委派。用户显式要求只读委派时使用 `HANDOFF`，仍保持单任务。
+默认优先级：`INLINE` > `HANDOFF` > `STAGED_REVIEW`。`COMPACT_COORDINATOR` 只在用户明确要求旧主任务压缩后继续验收时使用，不作为高风险默认模式。
 
-若当前任务已有长讨论、大量工具输出或多轮方案变更，禁止选择会持续唤醒旧任务的流程。使用 `HANDOFF`；高风险任务必须协调时，使用 `COMPACT_COORDINATOR`。
+只读委派使用 `HANDOFF`，仍保持单任务。当前任务已很长时，普通工作使用 `HANDOFF`，高风险工作使用 `STAGED_REVIEW`。
 
 不要使用 `/fork` 解决上下文成本；它会复制当前聊天历史。优先创建全新任务。`create_thread` 不可用时，输出紧凑交接包，让用户通过 `/task` 开始新任务。
 
@@ -31,26 +52,24 @@ description: 为 Codex 建立低上下文成本的任务分工。用于把已确
 - 不创建、切换、合并、rebase、cherry-pick 或清理 worktree。
 - 不使用子智能体协议、独立 `codex exec`、脚本编排、共享状态文件或高频轮询。
 - 执行任务不得再创建任务，不得扩大范围。
+- `STAGED_REVIEW` 的审查任务必须由用户明确触发；执行任务不得创建审查任务。
+- 不读取特定代理的数据库、日志或价格表作为核心流程前置条件。
 - `create_thread` 没有硬 token budget 参数；不要声称已设置 token 上限。
 - 当前 `create_thread` 未暴露工具调用数、运行时长、累计上下文、费用上限或任务中断参数。没有这些运行时能力时，任何提示词预算都只是软限制。
-- 用户未明确接受软预算风险时，不创建 `HANDOFF` 或 `COMPACT_COORDINATOR` 任务；使用 `INLINE`。
+- 用户未明确接受软预算风险时，不创建 `HANDOFF`、`STAGED_REVIEW` 或 `COMPACT_COORDINATOR` 任务；使用 `INLINE`。
+- 用户在原请求中已给出模型、effort 和软预算接受声明时，视为完成确认，不额外增加确认回合。
 
 ## 与 grill-me 联动
 
-`grill-me` 只负责质疑并收敛方案。用户随后显式调用 `$model-delegate` 或明确说“按已确认方案委派执行”时：
-
-1. 把最终方案作为既定输入，不重复架构讨论。
-2. 仍有未决范围、权限或验收条件时，留在 `INLINE` 补齐。
-3. 只发送最终决策、边界、必要事实和验收条件，不发送完整聊天记录。
+`grill-me` 只负责收敛方案。用户随后明确要求委派时，把最终方案作为既定输入；仍有未决范围、权限或验收条件时留在 `INLINE`。只发送最终决策、边界、必要事实和验收条件。
 
 ## COST_FIRST 上下文策略
 
 省钱优先时使用“最短且足够”的任务说明。过短导致重新发现、追问或返工时，成本反而增加。
 
 - capsule 不超过 20 行；`INPUTS` 最多 5 项事实，`ACCEPTANCE` 最多 5 项检查。
-- 只传最终决定和无法从项目读取的事实。项目规则、代码和配置只传路径或符号，不粘贴正文。
-- 不传完整聊天记录、搜索结果、日志、diff、历史失败或重复工具说明。
-- 使用 `BASE_COMMIT`、文件路径、命令和测试名作为证据指针，让执行任务按需读取。
+- 只传最终决定和无法从项目读取的事实；项目内容使用路径、符号、`BASE_COMMIT`、命令和测试名作为指针。
+- 不传完整聊天、搜索结果、日志、diff、历史失败或重复工具说明。
 - 大输出先用过滤、聚合或索引工具提取关键段；不要让父模型读取后再人工总结。
 - 父任务不得要求执行任务重述可从提交或文件直接验证的信息。
 
@@ -59,11 +78,9 @@ description: 为 Codex 建立低上下文成本的任务分工。用于把已确
 一次性完成以下检查：
 
 1. 读取项目 `AGENTS.md`、相关目录规则及明确要求的技能。
-2. 记录 `PROJECT_ROOT`、当前分支、`BASE_COMMIT`、文件边界、检查命令和相关工具。
-3. 按项目要求使用 CodeGraph、OpenWolf 或其他工具；不要假设新任务继承主任务已加载的上下文或实时连接。
-4. 检查 `git status`。工作区不干净时不得自动 stash、覆盖或删除用户修改；先让用户决定。
-5. 工作区干净后运行 `git pull --ff-only`。无法 fast-forward 时停止，不自动 merge 或 rebase。
-6. 使用 `list_projects` 确认保存项目及 `projectId`。
+2. 记录 `PROJECT_ROOT`、分支、`BASE_COMMIT`、边界、检查和必需工具；不要假设新任务继承实时连接。
+3. 检查 `git status`；不干净时不 stash、覆盖或删除。干净后运行 `git pull --ff-only`，失败时停止。
+4. 使用 `list_projects` 确认保存项目及 `projectId`。
 
 只做一次定向发现。不要在主任务重复扫描仓库、重新读取已确认文件或执行实现级调查。
 
@@ -71,49 +88,26 @@ description: 为 Codex 建立低上下文成本的任务分工。用于把已确
 
 - 每次委派都要求用户明确确认规范模型名和 reasoning effort。未确认时停止，不调用 `create_thread`。
 - 列出当前 `create_thread` 明确接受的全部规范模型和 effort；不得依赖用户配置的默认模型。
-- 创建任务时必须显式传入已确认的 `model` 和 `thinking`，使后续默认配置变化不会改变本次任务。
+- 创建任务时显式传入已确认的 `model` 和 `thinking`。
 - `max` 或 `ultra` 只在用户明确选择时使用；不得推荐为默认值，不得因任务复杂而自动提高。
-- 不使用 provider 路由后缀、显示名或历史记录猜测模型。
+- 不从路由后缀、显示名或历史记录猜测模型。
 
 ## 交接包
 
-创建任务前生成一个不超过 20 行的 `DELEGATION_CAPSULE`。创建后不再重写或扩展。
+通过委派准入并确认模式、模型、effort 和软预算后，才读取 [references/delegation-capsule.md](references/delegation-capsule.md)。`INLINE` 不读取该文件。
 
-```text
-DELEGATION_CAPSULE
-MODE: HANDOFF | COMPACT_COORDINATOR; TASK_KIND: READ_ONLY | WRITE
-DELEGATION_KEY: 唯一标识
-ROLE: Standalone bounded execution task; report directly to user
-PROJECT_ROOT: 共享检出目录; BASE_COMMIT: 委派前提交
-MODEL: 用户确认的规范模型; THINKING: 用户确认的 effort
-SCOPE: 唯一目标
-INPUTS: 最多 5 项无法从项目读取的事实
-ACCEPTANCE: 最多 5 项可执行检查
-READ_BOUNDARIES: 允许读取的文件或目录
-WRITE_BOUNDARIES: WRITE 允许修改的文件；READ_ONLY 必须为 NONE
-RULES_AND_TOOLING: 路径或名称；标记 REQUIRED
-CHECKS_AND_POST_ACTIONS: 命令或入口
-COST_CONTROL: SOFT; USER_ACCEPTED=YES
-LIMITS: tasks=1; discovery=1; tools=12; batch=4; minutes=20; retries=1
-HARD_LIMITS_UNAVAILABLE: token、累计上下文、费用、外部中断
-STOP_RULE: 达到软限制即返回 SOFT_BUDGET_EXHAUSTED
-OUTPUT_PROFILE: TERSE_SAFE; report<=12 行; error<=3 行
-CONSTRAINTS: local、无 worktree、无范围扩展、无破坏性操作
-```
+创建任务前生成不超过 20 行的 `DELEGATION_CAPSULE`。创建后不重写、不扩展；读写边界、预算语义和报告压缩规则以该 reference 为准。
 
-`READ_BOUNDARIES` 和 `WRITE_BOUNDARIES` 是硬边界。业务逻辑、架构、权限、数据范围或公共接口未在 capsule 明确授权时，执行任务必须停止。
+## LOG_ANALYSIS profile
 
-只有运行面实际提供并启用 token、费用、工具调用、时长上限或外部中断能力时，才可把 `ENFORCEMENT` 写为 `HARD`，并记录具体工具参数和验证证据。不得把模型自报停止当作硬熔断。
+日志、测试输出、依赖树或其他大型文本证据使用 `PROFILE: LOG_ANALYSIS`，模式仍选择 `HANDOFF` 或 `STAGED_REVIEW`。选择后才读取 [references/log-analysis.md](references/log-analysis.md)。
 
-`LIMITS.tools` 按底层工具调用计数；批量或并行包装中的每个子调用分别计数，不得把几十个子调用算作一次。单次批量最多包含 `LIMITS.batch` 个子调用。
+核心限制：
 
-`TERSE_SAFE` 只压缩过程说明和报告：
-
-- 无前言、进度播报和重复总结。
-- 不附完整日志、diff、capsule 或逐文件叙述。
-- 失败只保留决定性错误，最多 3 行。
-- 每个事实只写一次；保留所有否定词、数字、路径、ID 和安全约束。
-- 代码、文档、提交信息和用户要求的正式产物使用正常语言。
+- 固定 `TASK_KIND: READ_ONLY`，要求明确时间范围、输入位置和分析问题。
+- 最多一次原始数据扫描；优先使用当前环境可用的索引、过滤或聚合工具。
+- 不要求特定工具存在；没有安全过滤方法时返回 `TOOLING_GAP`。
+- 不在任务包或报告中传递完整原始日志。
 
 ## HANDOFF
 
@@ -146,9 +140,22 @@ CONSTRAINTS: local、无 worktree、无范围扩展、无破坏性操作
 - 范围仍未收敛。
 - 工作区状态不满足共享检出目录安全条件。
 
+`INLINE` 可由当前任务直接完成，或由当前任务按自身规则选择原生子智能体；本技能不编排该子智能体流程。
+
+## STAGED_REVIEW
+
+高风险工作默认使用本模式。选择后才读取 [references/staged-review.md](references/staged-review.md)。
+
+核心限制：
+
+- 旧主任务创建执行任务后立即结束，不等待、不恢复、不验收。
+- 执行任务完成后输出不超过 12 行的 `REVIEW_CAPSULE`。
+- 用户明确要求审查后，才创建全新审查任务。
+- 执行任务不得创建审查任务；审查任务不得重新读取完整历史或原始日志。
+
 ## COMPACT_COORDINATOR
 
-仅高风险工作或用户明确要求旧主任务独立验收时使用。选择后才读取 [references/compact-coordinator.md](references/compact-coordinator.md)。
+仅用户明确要求旧主任务在 `/compact` 后继续独立验收时使用。选择后才读取 [references/compact-coordinator.md](references/compact-coordinator.md)。
 
 核心限制：
 
@@ -184,9 +191,9 @@ RISKS: 未验证项
 - 用户未确认模型、effort 或软预算风险：使用 `INLINE`，不创建任务。
 - 达到软预算：返回 `SOFT_BUDGET_EXHAUSTED`，不自动提高 effort、续派或创建替代任务。
 - 用户要求硬费用上限，但运行面没有硬限制或中断能力：返回 `HARD_BUDGET_UNAVAILABLE`，不创建任务。
-- 静态技能校验不证明真实任务生命周期；未经用户明确批准，不运行高成本委派 E2E。
+- 静态技能校验不证明真实任务生命周期；真实委派 E2E 仅在用户明确确认后运行。
 
-## 回归测试
+## 验证策略
 
 每次修改本技能后运行：
 
@@ -195,6 +202,15 @@ python3 model-delegate/scripts/validate_contract.py
 python3 scripts/validate_repo.py
 ```
 
-第一条命令使用固定历史基线检查上下文体积、估算 token、capsule 和报告行数、读写协议、模型锁定、预算语义及父任务验收上限。token 使用透明的混合文本估算：CJK 类字符按 1 token，其余内容按每 4 UTF-8 bytes 估算 1 token。
+这些静态门禁不调用模型、不创建任务、不依赖外部代理或计费环境，默认执行。
 
-该指标只覆盖技能、capsule 和报告文本，不包含系统提示、工具 schema、聊天历史、缓存、推理或实际执行；不得当作真实账单。准确费用 E2E 只能在运行面提供可比较 usage 数据后执行。
+真实委派 E2E 是辅助验证。用户在当前请求中未明确批准时，修改完成后只询问一次；不得自动创建测试任务。用户不运行时报告：
+
+```text
+STATIC_VALIDATION: PASS
+LIVE_E2E: NOT_RUN_BY_USER_CHOICE
+```
+
+运行时 usage 属于可选外部证据。缺失时报告 `RUNTIME_USAGE: UNAVAILABLE` 和 `COST_SAVINGS: NOT_VERIFIED`，不得阻塞核心流程，也不得从模型名或历史价格推算真实费用。
+
+静态 token 估算仅覆盖技能、capsule 和报告文本：CJK 类字符按 1 token，其他内容按每 4 UTF-8 bytes 估算 1 token；不得当作真实账单。
