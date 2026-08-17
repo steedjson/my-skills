@@ -43,6 +43,17 @@ description: 为 Codex 建立低上下文成本的任务分工。用于把已确
 2. 仍有未决范围、权限或验收条件时，留在 `INLINE` 补齐。
 3. 只发送最终决策、边界、必要事实和验收条件，不发送完整聊天记录。
 
+## COST_FIRST 上下文策略
+
+省钱优先时使用“最短且足够”的任务说明。过短导致重新发现、追问或返工时，成本反而增加。
+
+- capsule 不超过 20 行；`INPUTS` 最多 5 项事实，`ACCEPTANCE` 最多 5 项检查。
+- 只传最终决定和无法从项目读取的事实。项目规则、代码和配置只传路径或符号，不粘贴正文。
+- 不传完整聊天记录、搜索结果、日志、diff、历史失败或重复工具说明。
+- 使用 `BASE_COMMIT`、文件路径、命令和测试名作为证据指针，让执行任务按需读取。
+- 大输出先用过滤、聚合或索引工具提取关键段；不要让父模型读取后再人工总结。
+- 父任务不得要求执行任务重述可从提交或文件直接验证的信息。
+
 ## 委派前检查
 
 一次性完成以下检查：
@@ -66,38 +77,27 @@ description: 为 Codex 建立低上下文成本的任务分工。用于把已确
 
 ## 交接包
 
-创建任务前生成一个不超过 30 行的 `DELEGATION_CAPSULE`。创建后不再重写或扩展。
+创建任务前生成一个不超过 20 行的 `DELEGATION_CAPSULE`。创建后不再重写或扩展。
 
 ```text
 DELEGATION_CAPSULE
-MODE: HANDOFF | COMPACT_COORDINATOR
-TASK_KIND: READ_ONLY | WRITE
-ROLE: Standalone bounded execution task; report directly to user
+MODE: HANDOFF | COMPACT_COORDINATOR; TASK_KIND: READ_ONLY | WRITE
 DELEGATION_KEY: 唯一标识
-PROJECT_ROOT: 共享主项目检出目录
-BASE_COMMIT: 委派前提交
-MODEL_AND_THINKING: 用户明确确认的规范模型和 reasoning effort
+ROLE: Standalone bounded execution task; report directly to user
+PROJECT_ROOT: 共享检出目录; BASE_COMMIT: 委派前提交
+MODEL: 用户确认的规范模型; THINKING: 用户确认的 effort
 SCOPE: 唯一目标
-INPUTS: 已确认的最小事实
-ACCEPTANCE: 可执行验收条件
+INPUTS: 最多 5 项无法从项目读取的事实
+ACCEPTANCE: 最多 5 项可执行检查
 READ_BOUNDARIES: 允许读取的文件或目录
 WRITE_BOUNDARIES: WRITE 允许修改的文件；READ_ONLY 必须为 NONE
-PROJECT_RULES: 规则读取顺序
-PROJECT_TOOLING: 仅列本任务需要的工具及 REQUIRED 状态
-CHECKS: 必须运行的检查
-POST_COMMIT_ACTIONS: 明确存在的收尾动作
-COST_CONTROL:
-  ENFORCEMENT: SOFT
-  USER_ACCEPTED_SOFT_LIMITS: YES
-  MAX_DELEGATED_TASKS: 1
-  MAX_BROAD_DISCOVERY_PASSES: 1
-  MAX_TOOL_CALLS: 12
-  MAX_ITEMS_PER_BATCH: 4
-  MAX_ELAPSED_MINUTES: 20
-  MAX_RETRIES_PER_COMMAND: 1
-  MAX_REPORT_LINES: 20
-  HARD_LIMITS_UNAVAILABLE: token、累计上下文、费用和外部中断
-  STOP_RULE: 达到任一软限制时立即返回 SOFT_BUDGET_EXHAUSTED
+RULES_AND_TOOLING: 路径或名称；标记 REQUIRED
+CHECKS_AND_POST_ACTIONS: 命令或入口
+COST_CONTROL: SOFT; USER_ACCEPTED=YES
+LIMITS: tasks=1; discovery=1; tools=12; batch=4; minutes=20; retries=1
+HARD_LIMITS_UNAVAILABLE: token、累计上下文、费用、外部中断
+STOP_RULE: 达到软限制即返回 SOFT_BUDGET_EXHAUSTED
+OUTPUT_PROFILE: TERSE_SAFE; report<=12 行; error<=3 行
 CONSTRAINTS: local、无 worktree、无范围扩展、无破坏性操作
 ```
 
@@ -105,7 +105,15 @@ CONSTRAINTS: local、无 worktree、无范围扩展、无破坏性操作
 
 只有运行面实际提供并启用 token、费用、工具调用、时长上限或外部中断能力时，才可把 `ENFORCEMENT` 写为 `HARD`，并记录具体工具参数和验证证据。不得把模型自报停止当作硬熔断。
 
-`MAX_TOOL_CALLS` 按底层工具调用计数；批量或并行包装中的每个子调用分别计数，不得把几十个子调用算作一次。单次批量最多包含 `MAX_ITEMS_PER_BATCH` 个子调用。
+`LIMITS.tools` 按底层工具调用计数；批量或并行包装中的每个子调用分别计数，不得把几十个子调用算作一次。单次批量最多包含 `LIMITS.batch` 个子调用。
+
+`TERSE_SAFE` 只压缩过程说明和报告：
+
+- 无前言、进度播报和重复总结。
+- 不附完整日志、diff、capsule 或逐文件叙述。
+- 失败只保留决定性错误，最多 3 行。
+- 每个事实只写一次；保留所有否定词、数字、路径、ID 和安全约束。
+- 代码、文档、提交信息和用户要求的正式产物使用正常语言。
 
 ## HANDOFF
 
@@ -151,7 +159,7 @@ CONSTRAINTS: local、无 worktree、无范围扩展、无破坏性操作
 
 ## 执行任务报告
 
-报告不超过 20 行：
+报告不超过 12 行：
 
 ```text
 STATUS: COMPLETE | BLOCKED | SOFT_BUDGET_EXHAUSTED

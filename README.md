@@ -19,7 +19,7 @@
 
 #### [model-delegate](./model-delegate/)
 
-使用 Codex App 原生顶层任务建立低上下文成本分工。默认 `HANDOFF` 单向交接：新任务直接完成工作，旧主任务不等待、不轮询、不验收；任务包强制区分 `READ_ONLY` 与 `WRITE`。委派前必须明确确认模型、effort；运行面没有硬费用熔断时，还必须确认接受软预算风险。
+使用 Codex App 原生顶层任务建立低上下文成本分工。默认 `HANDOFF` 单向交接：新任务直接完成工作，旧主任务不等待、不轮询、不验收；`COST_FIRST` 使用不超过 20 行的最短充分任务包和不超过 12 行的报告。任务包强制区分 `READ_ONLY` 与 `WRITE`；委派前必须明确确认模型、effort 和软预算风险。
 
 #### [ccs-restore-efforts](./ccs-restore-efforts/)
 
