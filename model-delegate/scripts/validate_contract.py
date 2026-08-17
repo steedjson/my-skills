@@ -16,6 +16,7 @@ CAPSULE_PATH = SKILL_DIR / "references" / "delegation-capsule.md"
 STAGED_REVIEW_PATH = SKILL_DIR / "references" / "staged-review.md"
 LOG_ANALYSIS_PATH = SKILL_DIR / "references" / "log-analysis.md"
 PASSIVE_RETURN_PATH = SKILL_DIR / "references" / "passive-return.md"
+PASSIVE_SESSION_PATH = SKILL_DIR / "references" / "passive-session.md"
 
 LEGACY_SKILL_BYTES = 25_741
 LEGACY_ESTIMATED_TOKENS = 8_140
@@ -30,6 +31,9 @@ MAX_CAPSULE_LINES = 20
 MAX_REPORT_LINES = 12
 MAX_COLLECTOR_CAPSULE_LINES = 16
 MAX_RETURN_CAPSULE_LINES = 10
+MAX_SESSION_CAPSULE_LINES = 18
+MAX_ROUND_DELTA_LINES = 6
+MAX_SESSION_RETURN_LINES = 10
 
 
 def fenced_block(text: str, marker: str) -> str | None:
@@ -73,6 +77,7 @@ def validate_contract(
     staged_review: str,
     log_analysis: str,
     passive_return: str,
+    passive_session: str,
 ) -> tuple[list[str], dict[str, int]]:
     errors: list[str] = []
     skill_bytes = len(skill.encode("utf-8"))
@@ -81,19 +86,29 @@ def validate_contract(
     staged_review_bytes = len(staged_review.encode("utf-8"))
     log_analysis_bytes = len(log_analysis.encode("utf-8"))
     passive_return_bytes = len(passive_return.encode("utf-8"))
+    passive_session_bytes = len(passive_session.encode("utf-8"))
 
     capsule = fenced_block(capsule_reference, "DELEGATION_CAPSULE")
     report = fenced_block(capsule_reference, "STATUS: COMPLETE")
     collector_capsule = fenced_block(passive_return, "COLLECTOR_CAPSULE")
     return_capsule = fenced_block(passive_return, "RETURN_CAPSULE")
+    session_capsule = fenced_block(passive_session, "SESSION_CAPSULE")
+    round_delta = fenced_block(passive_session, "ROUND_DELTA")
+    session_return = fenced_block(passive_session, "SESSION_RETURN_CAPSULE")
     capsule_lines = len(capsule.splitlines()) if capsule else 0
     report_lines = len(report.splitlines()) if report else 0
     collector_capsule_lines = len(collector_capsule.splitlines()) if collector_capsule else 0
     return_capsule_lines = len(return_capsule.splitlines()) if return_capsule else 0
+    session_capsule_lines = len(session_capsule.splitlines()) if session_capsule else 0
+    round_delta_lines = len(round_delta.splitlines()) if round_delta else 0
+    session_return_lines = len(session_return.splitlines()) if session_return else 0
     capsule_fields = block_fields(capsule)
     report_fields = block_fields(report)
     collector_capsule_fields = block_fields(collector_capsule)
     return_capsule_fields = block_fields(return_capsule)
+    session_capsule_fields = block_fields(session_capsule)
+    round_delta_fields = block_fields(round_delta)
+    session_return_fields = block_fields(session_return)
 
     metrics = {
         "skill_bytes": skill_bytes,
@@ -108,12 +123,17 @@ def validate_contract(
         "log_analysis_estimated_tokens": estimate_tokens(log_analysis),
         "passive_return_bytes": passive_return_bytes,
         "passive_return_estimated_tokens": estimate_tokens(passive_return),
+        "passive_session_bytes": passive_session_bytes,
+        "passive_session_estimated_tokens": estimate_tokens(passive_session),
         "capsule_lines": capsule_lines,
         "capsule_estimated_tokens": estimate_tokens(capsule or ""),
         "report_lines": report_lines,
         "report_estimated_tokens": estimate_tokens(report or ""),
         "collector_capsule_lines": collector_capsule_lines,
         "return_capsule_lines": return_capsule_lines,
+        "session_capsule_lines": session_capsule_lines,
+        "round_delta_lines": round_delta_lines,
+        "session_return_lines": session_return_lines,
         "parent_review_passes": integer_setting(coordinator, "MAX_PARENT_REVIEW_PASSES") or 0,
         "parent_tool_calls": integer_setting(coordinator, "MAX_PARENT_TOOL_CALLS") or 0,
         "correction_messages": integer_setting(coordinator, "MAX_CORRECTION_MESSAGES") or 0,
@@ -137,6 +157,7 @@ def validate_contract(
         ("staged-review.md", staged_review_bytes),
         ("log-analysis.md", log_analysis_bytes),
         ("passive-return.md", passive_return_bytes),
+        ("passive-session.md", passive_session_bytes),
     ):
         if size > MAX_MODE_REFERENCE_BYTES:
             errors.append(f"{name} too large: {size} > {MAX_MODE_REFERENCE_BYTES} bytes")
@@ -161,6 +182,24 @@ def validate_contract(
         errors.append(
             f"return capsule too long: {return_capsule_lines} > "
             f"{MAX_RETURN_CAPSULE_LINES} lines"
+        )
+    if not session_capsule:
+        errors.append("SESSION_CAPSULE block missing")
+    elif session_capsule_lines > MAX_SESSION_CAPSULE_LINES:
+        errors.append(
+            f"session capsule too long: {session_capsule_lines} > "
+            f"{MAX_SESSION_CAPSULE_LINES} lines"
+        )
+    if not round_delta:
+        errors.append("ROUND_DELTA block missing")
+    elif round_delta_lines > MAX_ROUND_DELTA_LINES:
+        errors.append(f"round delta too long: {round_delta_lines} > {MAX_ROUND_DELTA_LINES} lines")
+    if not session_return:
+        errors.append("SESSION_RETURN_CAPSULE block missing")
+    elif session_return_lines > MAX_SESSION_RETURN_LINES:
+        errors.append(
+            f"session return too long: {session_return_lines} > "
+            f"{MAX_SESSION_RETURN_LINES} lines"
         )
 
     expected_capsule_fields = [
@@ -235,20 +274,65 @@ def validate_contract(
     if return_capsule and return_capsule_fields != expected_return_fields:
         errors.append("RETURN_CAPSULE fields changed, duplicated, missing, or reordered")
 
+    expected_session_fields = [
+        "MODE",
+        "DELEGATION_KEY",
+        "MODEL",
+        "ROUND_1_QUERY",
+        "INPUT_LOCATION",
+        "TIME_RANGE",
+        "EVIDENCE_FIELDS",
+        "READ_BOUNDARIES",
+        "RULES_AND_TOOLING",
+        "FORK_CONTEXT",
+        "LIMITS",
+        "ROUND_INPUT",
+        "RAW_LOG_OUTPUT",
+        "CLEANUP_POLICY",
+        "STOP_RULE",
+        "RETURN_PROFILE",
+    ]
+    if session_capsule and session_capsule_fields != expected_session_fields:
+        errors.append("SESSION_CAPSULE fields changed, duplicated, missing, or reordered")
+
+    expected_round_delta_fields = [
+        "DELEGATION_KEY",
+        "ROUND",
+        "DEPENDENCY",
+        "QUERY_DELTA",
+        "EVIDENCE_DELTA",
+    ]
+    if round_delta and round_delta_fields != expected_round_delta_fields:
+        errors.append("ROUND_DELTA fields changed, duplicated, missing, or reordered")
+
+    expected_session_return_fields = [
+        "STATUS",
+        "DELEGATION_KEY",
+        "ROUND",
+        "QUERY",
+        "RESULT",
+        "EVIDENCE",
+        "TOOLING_GAPS",
+        "UNVERIFIED",
+        "NEXT_ACTION",
+    ]
+    if session_return and session_return_fields != expected_session_return_fields:
+        errors.append("SESSION_RETURN_CAPSULE fields changed, duplicated, missing, or reordered")
+
     required_skill = (
         "## 委派准入",
         "## COST_FIRST 上下文策略",
-        "## PASSIVE_RETURN",
+        "## PASSIVE modes",
         "## STAGED_REVIEW",
         "## LOG_ANALYSIS profile",
         "每次委派都要求用户明确确认规范模型名和 reasoning effort",
         "HARD_BUDGET_UNAVAILABLE",
         "执行任务不得再创建任务",
-        "只有 `PASSIVE_RETURN` 可创建一个原生只读子智能体",
+        "只有 `PASSIVE_RETURN` 和 `PASSIVE_SESSION` 可创建一个原生只读子智能体",
         "顶层任务始终使用保存项目的 `local` 环境和共享检出目录，不使用 worktree",
-        "`PASSIVE_RETURN` 只读子智能体不得调用 worktree 管理工具或依赖子工作区写入",
+        "被动模式子智能体不得调用 worktree 管理工具或依赖子工作区写入",
         "`fork_context=false`",
-        "最多调用一次 `wait_agent`",
+        "`PASSIVE_SESSION`：最多两次 `wait_agent`、一次 `send_input`",
         "不自动改用其他模式",
         "核心协议不得依赖特定代理、供应商、价格表、本地计费数据库或 usage API",
         "`COMPACT_COORDINATOR` 只在用户明确要求旧主任务压缩后继续验收时使用",
@@ -339,6 +423,30 @@ def validate_contract(
         if value not in passive_return:
             errors.append(f"required passive return contract missing: {value}")
 
+    required_passive_session = (
+        "TASK_KIND: READ_ONLY",
+        "FORK_CONTEXT: false",
+        "children=1",
+        "rounds=2",
+        "send_inputs=1",
+        "waits=2",
+        "parent_resumes=2",
+        "corrections=0",
+        "ROUND_INPUT: DELTA_ONLY",
+        "RAW_LOG_OUTPUT: FORBIDDEN",
+        "CLEANUP_POLICY: DEFER_TO_PARENT_SESSION_END",
+        "第一轮足够时立即结束",
+        "第二轮问题必须依赖第一轮结果",
+        "不得自动启动第二轮",
+        "调用一次 `send_input`",
+        "不得第三次等待、第二次 `send_input`",
+        "预计需要第三轮时直接使用 `HANDOFF`",
+        "第一轮协议不合格时返回 `BLOCKED`",
+    )
+    for value in required_passive_session:
+        if value not in passive_session:
+            errors.append(f"required passive session contract missing: {value}")
+
     forbidden_skill = (
         "使用用户配置的运行时默认值",
         "FILE_BOUNDARIES",
@@ -350,7 +458,15 @@ def validate_contract(
             errors.append(f"forbidden legacy contract present: {value}")
 
     all_contract_text = "\n".join(
-        (skill, coordinator, capsule_reference, staged_review, log_analysis, passive_return)
+        (
+            skill,
+            coordinator,
+            capsule_reference,
+            staged_review,
+            log_analysis,
+            passive_return,
+            passive_session,
+        )
     )
     forbidden_runtime_coupling = (
         ".cc-switch",
@@ -382,180 +498,169 @@ def mutation_self_test(
     staged_review: str,
     log_analysis: str,
     passive_return: str,
+    passive_session: str,
 ) -> list[str]:
     failures: list[str] = []
+    names = (
+        "skill",
+        "coordinator",
+        "capsule_reference",
+        "staged_review",
+        "log_analysis",
+        "passive_return",
+        "passive_session",
+    )
+    base = dict(
+        zip(
+            names,
+            (
+                skill,
+                coordinator,
+                capsule_reference,
+                staged_review,
+                log_analysis,
+                passive_return,
+                passive_session,
+            ),
+            strict=True,
+        )
+    )
+
+    def variant(**changes: str) -> tuple[str, ...]:
+        values = base | changes
+        return tuple(values[name] for name in names)
+
     mutations = {
-        "missing task kind": (
-            skill.replace("TASK_KIND: READ_ONLY | WRITE", ""),
-            coordinator,
-            capsule_reference.replace("TASK_KIND: READ_ONLY | WRITE", ""),
-            staged_review,
-            log_analysis,
-            passive_return,
+        "missing task kind": variant(
+            capsule_reference=capsule_reference.replace("TASK_KIND: READ_ONLY | WRITE", "")
         ),
-        "runtime default model": (
-            skill + "\n用户未指定时使用用户配置的运行时默认值。\n",
-            coordinator,
-            capsule_reference,
-            staged_review,
-            log_analysis,
-            passive_return,
+        "runtime default model": variant(
+            skill=skill + "\n用户未指定时使用用户配置的运行时默认值。\n"
         ),
-        "verbose report": (
-            skill,
-            coordinator,
-            capsule_reference.replace("报告不超过 12 行", "报告不超过 20 行", 1),
-            staged_review,
-            log_analysis,
-            passive_return,
+        "verbose report": variant(
+            capsule_reference=capsule_reference.replace(
+                "报告不超过 12 行", "报告不超过 20 行", 1
+            )
         ),
-        "unbounded parent review": (
-            skill,
-            coordinator.replace("`MAX_PARENT_REVIEW_PASSES: 1`", "", 1),
-            capsule_reference,
-            staged_review,
-            log_analysis,
-            passive_return,
+        "unbounded parent review": variant(
+            coordinator=coordinator.replace("`MAX_PARENT_REVIEW_PASSES: 1`", "", 1)
         ),
-        "missing delegation gate": (
-            skill.replace("## 委派准入", "", 1),
-            coordinator,
-            capsule_reference,
-            staged_review,
-            log_analysis,
-            passive_return,
+        "missing delegation gate": variant(
+            skill=skill.replace("## 委派准入", "", 1)
         ),
-        "automatic fresh reviewer": (
-            skill,
-            coordinator,
-            capsule_reference,
-            staged_review.replace("执行任务不得创建审查任务", "执行任务创建审查任务", 1),
-            log_analysis,
-            passive_return,
+        "automatic fresh reviewer": variant(
+            staged_review=staged_review.replace(
+                "执行任务不得创建审查任务", "执行任务创建审查任务", 1
+            )
         ),
-        "raw log output allowed": (
-            skill,
-            coordinator,
-            capsule_reference,
-            staged_review,
-            log_analysis.replace("RAW_LOG_OUTPUT: FORBIDDEN", "RAW_LOG_OUTPUT: ALLOWED", 1),
-            passive_return,
+        "raw log output allowed": variant(
+            log_analysis=log_analysis.replace(
+                "RAW_LOG_OUTPUT: FORBIDDEN", "RAW_LOG_OUTPUT: ALLOWED", 1
+            )
         ),
-        "provider runtime dependency": (
-            skill + "\n读取 ~/.cc-switch/cc-switch.db 计算费用。\n",
-            coordinator,
-            capsule_reference,
-            staged_review,
-            log_analysis,
-            passive_return,
+        "provider runtime dependency": variant(
+            skill=skill + "\n读取 ~/.cc-switch/cc-switch.db 计算费用。\n"
         ),
-        "automatic live e2e": (
-            skill.replace(
+        "automatic live e2e": variant(
+            skill=skill.replace(
                 "真实委派 E2E 仅在用户明确确认后运行",
                 "每次修改后自动运行真实委派 E2E",
                 1,
-            ),
-            coordinator,
-            capsule_reference,
-            staged_review,
-            log_analysis,
-            passive_return,
+            )
         ),
-        "duplicate capsule field": (
-            skill,
-            coordinator,
-            capsule_reference.replace("INPUTS:", "SCOPE:", 1),
-            staged_review,
-            log_analysis,
-            passive_return,
+        "duplicate capsule field": variant(
+            capsule_reference=capsule_reference.replace("INPUTS:", "SCOPE:", 1)
         ),
-        "coordinator restored as default": (
-            skill.replace(
+        "coordinator restored as default": variant(
+            skill=skill.replace(
                 "`COMPACT_COORDINATOR` 只在用户明确要求旧主任务压缩后继续验收时使用",
                 "`COMPACT_COORDINATOR` 默认用于高风险任务",
                 1,
-            ),
-            coordinator,
-            capsule_reference,
-            staged_review,
-            log_analysis,
-            passive_return,
+            )
         ),
-        "read-only commit id restored": (
-            skill,
-            coordinator,
-            capsule_reference.replace(
+        "read-only commit id restored": variant(
+            capsule_reference=capsule_reference.replace(
                 "READ_ONLY_OMIT_COMMIT_ID=YES",
                 "READ_ONLY_OMIT_COMMIT_ID=NO",
                 1,
-            ),
-            staged_review,
-            log_analysis,
-            passive_return,
+            )
         ),
-        "passive return write enabled": (
-            skill,
-            coordinator,
-            capsule_reference,
-            staged_review,
-            log_analysis,
-            passive_return.replace("TASK_KIND: READ_ONLY", "TASK_KIND: WRITE", 1),
+        "passive return write enabled": variant(
+            passive_return=passive_return.replace(
+                "TASK_KIND: READ_ONLY", "TASK_KIND: WRITE", 1
+            )
         ),
-        "passive context inherited": (
-            skill,
-            coordinator,
-            capsule_reference,
-            staged_review,
-            log_analysis,
-            passive_return.replace("FORK_CONTEXT: false", "FORK_CONTEXT: true", 1),
+        "passive context inherited": variant(
+            passive_return=passive_return.replace(
+                "FORK_CONTEXT: false", "FORK_CONTEXT: true", 1
+            )
         ),
-        "multiple passive children": (
-            skill,
-            coordinator,
-            capsule_reference,
-            staged_review,
-            log_analysis,
-            passive_return.replace("children=1", "children=2", 1),
+        "multiple passive children": variant(
+            passive_return=passive_return.replace("children=1", "children=2", 1)
         ),
-        "multiple passive waits": (
-            skill,
-            coordinator,
-            capsule_reference,
-            staged_review,
-            log_analysis,
-            passive_return.replace("waits=1", "waits=2", 1),
+        "multiple passive waits": variant(
+            passive_return=passive_return.replace("waits=1", "waits=2", 1)
         ),
-        "passive correction enabled": (
-            skill,
-            coordinator,
-            capsule_reference,
-            staged_review,
-            log_analysis,
-            passive_return.replace("corrections=0", "corrections=1", 1),
+        "passive correction enabled": variant(
+            passive_return=passive_return.replace("corrections=0", "corrections=1", 1)
         ),
-        "passive raw logs allowed": (
-            skill,
-            coordinator,
-            capsule_reference,
-            staged_review,
-            log_analysis,
-            passive_return.replace("RAW_LOG_OUTPUT: FORBIDDEN", "RAW_LOG_OUTPUT: ALLOWED", 1),
+        "passive raw logs allowed": variant(
+            passive_return=passive_return.replace(
+                "RAW_LOG_OUTPUT: FORBIDDEN", "RAW_LOG_OUTPUT: ALLOWED", 1
+            )
         ),
-        "passive automatic fallback": (
-            skill.replace("不自动改用其他模式", "自动改用 HANDOFF", 1),
-            coordinator,
-            capsule_reference,
-            staged_review,
-            log_analysis,
-            passive_return,
+        "passive automatic fallback": variant(
+            skill=skill.replace("不自动改用其他模式", "自动改用 HANDOFF", 1)
         ),
-        "parent rereads raw logs": (
-            skill,
-            coordinator,
-            capsule_reference,
-            staged_review,
-            log_analysis,
-            passive_return.replace("不得重新读取原始日志", "重新读取原始日志", 1),
+        "parent rereads raw logs": variant(
+            passive_return=passive_return.replace(
+                "不得重新读取原始日志", "重新读取原始日志", 1
+            )
+        ),
+        "session write enabled": variant(
+            passive_session=passive_session.replace(
+                "TASK_KIND: READ_ONLY", "TASK_KIND: WRITE", 1
+            )
+        ),
+        "session context inherited": variant(
+            passive_session=passive_session.replace(
+                "FORK_CONTEXT: false", "FORK_CONTEXT: true", 1
+            )
+        ),
+        "session third round": variant(
+            passive_session=passive_session.replace("rounds=2", "rounds=3", 1)
+        ),
+        "session second child": variant(
+            passive_session=passive_session.replace("children=1", "children=2", 1)
+        ),
+        "session extra input": variant(
+            passive_session=passive_session.replace("send_inputs=1", "send_inputs=2", 1)
+        ),
+        "session extra wait": variant(
+            passive_session=passive_session.replace("waits=2", "waits=3", 1)
+        ),
+        "session correction enabled": variant(
+            passive_session=passive_session.replace("corrections=0", "corrections=1", 1)
+        ),
+        "session full context round": variant(
+            passive_session=passive_session.replace(
+                "ROUND_INPUT: DELTA_ONLY", "ROUND_INPUT: FULL_CONTEXT", 1
+            )
+        ),
+        "session raw logs allowed": variant(
+            passive_session=passive_session.replace(
+                "RAW_LOG_OUTPUT: FORBIDDEN", "RAW_LOG_OUTPUT: ALLOWED", 1
+            )
+        ),
+        "session automatic round two": variant(
+            passive_session=passive_session.replace(
+                "第一轮足够时立即结束", "第一轮后自动启动第二轮", 1
+            )
+        ),
+        "session allows round three": variant(
+            passive_session=passive_session.replace(
+                "预计需要第三轮时直接使用 `HANDOFF`", "允许进入第三轮", 1
+            )
         ),
     }
     for name, texts in mutations.items():
@@ -589,6 +694,7 @@ def print_metrics(metrics: dict[str, int]) -> None:
         f"staged:{metrics['staged_review_estimated_tokens']} "
         f"log:{metrics['log_analysis_estimated_tokens']} "
         f"passive:{metrics['passive_return_estimated_tokens']} "
+        f"session:{metrics['passive_session_estimated_tokens']} "
         f"coordinator:{metrics['coordinator_estimated_tokens']}"
     )
     print(
@@ -607,6 +713,12 @@ def print_metrics(metrics: dict[str, int]) -> None:
         f"return:{metrics['return_capsule_lines']}/{MAX_RETURN_CAPSULE_LINES}"
     )
     print(
+        "  session_capsules="
+        f"session:{metrics['session_capsule_lines']}/{MAX_SESSION_CAPSULE_LINES} "
+        f"delta:{metrics['round_delta_lines']}/{MAX_ROUND_DELTA_LINES} "
+        f"return:{metrics['session_return_lines']}/{MAX_SESSION_RETURN_LINES}"
+    )
+    print(
         "  parent_limits="
         f"review:{metrics['parent_review_passes']} "
         f"tools:{metrics['parent_tool_calls']} "
@@ -623,6 +735,7 @@ def main() -> int:
     staged_review = STAGED_REVIEW_PATH.read_text(encoding="utf-8")
     log_analysis = LOG_ANALYSIS_PATH.read_text(encoding="utf-8")
     passive_return = PASSIVE_RETURN_PATH.read_text(encoding="utf-8")
+    passive_session = PASSIVE_SESSION_PATH.read_text(encoding="utf-8")
     errors, metrics = validate_contract(
         skill,
         coordinator,
@@ -630,6 +743,7 @@ def main() -> int:
         staged_review,
         log_analysis,
         passive_return,
+        passive_session,
     )
     errors.extend(
         mutation_self_test(
@@ -639,6 +753,7 @@ def main() -> int:
             staged_review,
             log_analysis,
             passive_return,
+            passive_session,
         )
     )
     print_metrics(metrics)

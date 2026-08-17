@@ -25,13 +25,14 @@
     {
       "name": "model-delegate",
       "category": "models-and-routing",
-      "description": "Portable low-context Codex delegation with passive read-only returns, top-level handoff, staged review, bounded log analysis, and user-approved live E2E",
+      "description": "Portable low-context Codex delegation with one-shot and two-round passive read-only modes, top-level handoff, staged review, bounded log analysis, and user-approved live E2E",
       "files": [
         "SKILL.md",
         "references/compact-coordinator.md",
         "references/delegation-capsule.md",
         "references/log-analysis.md",
         "references/passive-return.md",
+        "references/passive-session.md",
         "references/staged-review.md",
         "scripts/validate_contract.py"
       ]

@@ -1,6 +1,6 @@
 ---
 name: model-delegate
-description: 为 Codex 建立低上下文成本的任务分工。用于判断工作应留在当前任务、由用户选定的只读辅助模型被动回传、单向交接、分阶段独立审查或显式压缩协调；支持受限日志分析、软预算和用户确认后的可选真实 E2E。
+description: 为 Codex 建立低上下文成本的任务分工。用于判断工作应留在当前任务、由只读辅助模型单轮回传或双轮会话、单向交接、分阶段独立审查或显式压缩协调；支持受限日志分析、软预算和用户确认后的可选真实 E2E。
 ---
 
 # 模型委派
@@ -36,13 +36,14 @@ description: 为 Codex 建立低上下文成本的任务分工。用于判断工
 |---|---|---|
 | `INLINE` | 未通过委派准入或范围未收敛 | 当前任务直接完成，不创建任务 |
 | `PASSIVE_RETURN` | 主任务仍需最终判断，且只需只读证据或大型输出摘要 | 创建一个无历史继承的子智能体；完成后被动返回一次；主任务继续 |
+| `PASSIVE_SESSION` | 第二个只读问题必须依赖第一轮结果 | 复用同一子智能体，最多两轮；每轮被动返回一次 |
 | `HANDOFF` | 已确认、边界清楚的低风险或中风险工作 | 创建新任务；旧主任务立即结束 |
 | `STAGED_REVIEW` | 数据迁移、数据修复、认证授权、租户隔离、生产配置、并发、公共接口、不可逆操作或其他高风险工作 | 执行任务完成后输出短审查包；用户明确触发全新审查任务；旧主任务永不恢复 |
 | `COMPACT_COORDINATOR` | 用户明确要求旧主任务在 `/compact` 后继续验收 | 创建执行任务；旧主任务压缩后最多恢复一次 |
 
-默认优先级：`INLINE` > `PASSIVE_RETURN` > `HANDOFF` > `STAGED_REVIEW`。`COMPACT_COORDINATOR` 只在用户明确要求旧主任务压缩后继续验收时使用。
+默认优先级：`INLINE` > `PASSIVE_RETURN` > `PASSIVE_SESSION` > `HANDOFF` > `STAGED_REVIEW`。`COMPACT_COORDINATOR` 只在用户明确要求旧主任务压缩后继续验收时使用。
 
-主任务上下文较短或中等、仍需结果时使用 `PASSIVE_RETURN`。主任务已很长时，普通工作使用 `HANDOFF`，高风险工作使用 `STAGED_REVIEW`。
+已知问题一次发送时使用 `PASSIVE_RETURN`；第二问必须依赖第一轮时使用 `PASSIVE_SESSION`。主任务已很长时改用 `HANDOFF` 或 `STAGED_REVIEW`。
 
 不要使用 `/fork` 解决上下文成本；它会复制当前聊天历史。优先创建全新任务。`create_thread` 不可用时，输出紧凑交接包，让用户通过 `/task` 开始新任务。
 
@@ -51,11 +52,11 @@ description: 为 Codex 建立低上下文成本的任务分工。用于判断工
 - 只有用户显式调用本技能或明确确认委派后，才创建任务。
 - 默认最多创建一个执行任务；不得自动拆成多个任务或并发。
 - 顶层任务始终使用保存项目的 `local` 环境和共享检出目录，不使用 worktree。
-- `PASSIVE_RETURN` 只读子智能体不得调用 worktree 管理工具或依赖子工作区写入。
-- 只有 `PASSIVE_RETURN` 可创建一个原生只读子智能体；其他模式不使用子智能体协议。
+- 被动模式子智能体不得调用 worktree 管理工具或依赖子工作区写入。
+- 只有 `PASSIVE_RETURN` 和 `PASSIVE_SESSION` 可创建一个原生只读子智能体。
 - 不使用独立 `codex exec`、脚本编排、共享状态文件或高频轮询。
 - 执行任务不得再创建任务，不得扩大范围。
-- `PASSIVE_RETURN` 子智能体不得写文件、继承父聊天或创建后代。
+- 被动模式子智能体不得写文件、继承父聊天或创建后代。
 - `STAGED_REVIEW` 的审查任务必须由用户明确触发；执行任务不得创建审查任务。
 - 不读取特定代理的数据库、日志或价格表作为核心流程前置条件。
 - `create_thread` 没有硬 token budget 参数；不要声称已设置 token 上限。
@@ -92,19 +93,19 @@ description: 为 Codex 建立低上下文成本的任务分工。用于判断工
 
 - 每次委派都要求用户明确确认规范模型名和 reasoning effort。未确认时停止。
 - 列出所选运行时工具明确接受的全部规范模型和 effort；不得依赖默认模型。
-- `PASSIVE_RETURN` 显式传入子智能体 `model` 和 `reasoning_effort`；顶层模式显式传入 `model` 和 `thinking`。
+- 被动模式显式传入子智能体 `model` 和 `reasoning_effort`；顶层模式显式传入 `model` 和 `thinking`。
 - `max` 或 `ultra` 只在用户明确选择时使用；不得推荐为默认值，不得因任务复杂而自动提高。
 - 不从路由后缀、显示名或历史记录猜测模型。
 
 ## 交接包
 
-`HANDOFF`、`STAGED_REVIEW` 或 `COMPACT_COORDINATOR` 通过准入并完成确认后，才读取 [references/delegation-capsule.md](references/delegation-capsule.md)。`INLINE` 和 `PASSIVE_RETURN` 不读取该文件。
+顶层模式通过准入并完成确认后，才读取 [references/delegation-capsule.md](references/delegation-capsule.md)。`INLINE` 和被动模式不读取该文件。
 
 创建任务前生成不超过 20 行的 `DELEGATION_CAPSULE`。创建后不重写、不扩展；读写边界、预算语义和报告压缩规则以该 reference 为准。
 
 ## LOG_ANALYSIS profile
 
-日志、测试输出、依赖树或其他大型文本证据使用 `PROFILE: LOG_ANALYSIS`，模式选择 `PASSIVE_RETURN`、`HANDOFF` 或 `STAGED_REVIEW`。选择后才读取 [references/log-analysis.md](references/log-analysis.md)。
+日志、测试输出、依赖树或其他大型文本证据使用 `PROFILE: LOG_ANALYSIS`，可配合任一被动或顶层模式。选择后才读取 [references/log-analysis.md](references/log-analysis.md)。
 
 核心限制：
 
@@ -113,14 +114,15 @@ description: 为 Codex 建立低上下文成本的任务分工。用于判断工
 - 不要求特定工具存在；没有安全过滤方法时返回 `TOOLING_GAP`。
 - 不在任务包或报告中传递完整原始日志。
 
-## PASSIVE_RETURN
+## PASSIVE modes
 
-主任务仍需最终判断、当前上下文尚可继续且子任务严格只读时使用。选择后才读取 [references/passive-return.md](references/passive-return.md)。
+主任务仍需最终判断、当前上下文尚可继续且子任务严格只读时使用。单轮读取 [references/passive-return.md](references/passive-return.md)；双轮读取 [references/passive-session.md](references/passive-session.md)。
 
 核心限制：
 
 - 使用一个原生子智能体，`fork_context=false`，显式传入用户确认的模型和 effort。
-- 主任务最多调用一次 `wait_agent`；不调用 `send_input`，不做纠偏或第二次等待。
+- `PASSIVE_RETURN`：一次 `wait_agent`，不调用 `send_input`。
+- `PASSIVE_SESSION`：最多两次 `wait_agent`、一次 `send_input`；第二轮只传依赖第一轮的增量问题。
 - 子智能体返回不超过 10 行的 `RETURN_CAPSULE`；主任务不读取原始日志或重复执行同一调查。
 - 子智能体工具不可用、超时或协议不合格时返回 `TOOLING_GAP` 或 `BLOCKED`，不自动改用其他模式。
 
@@ -130,16 +132,7 @@ description: 为 Codex 建立低上下文成本的任务分工。用于判断工
 
 ## INLINE
 
-不调用任务协调工具。当前任务直接完成工作并按项目规则验证。
-
-以下情况强制使用 `INLINE`：
-
-- 只读计划、方案整理、普通审计或信息收集，且用户未明确要求委派。
-- 创建任务的固定成本高于工作本身。
-- 范围仍未收敛。
-- 工作区状态不满足共享检出目录安全条件。
-
-`INLINE` 可由当前任务直接完成，或由当前任务按自身规则选择原生子智能体；本技能不编排该子智能体流程。
+不调用任务协调工具。按“委派准入”的条件由当前任务直接完成并验证。
 
 ## STAGED_REVIEW
 
@@ -166,7 +159,7 @@ description: 为 Codex 建立低上下文成本的任务分工。用于判断工
 ## 失败策略
 
 - `create_thread` 不可用：输出 capsule，让用户用 `/task` 创建新任务；不得改用 `/fork`。
-- 原生子智能体工具不可用：`PASSIVE_RETURN` 返回 `TOOLING_GAP`；未经用户决定不自动改用顶层任务。
+- 原生子智能体工具不可用：被动模式返回 `TOOLING_GAP`；未经用户决定不自动改用顶层任务。
 - 必需工具缺失：返回 `TOOLING_GAP`；影响安全或验收时停止。
 - 发现范围扩展：返回 `BLOCKED`，不自动增加任务。
 - 用户未确认模型、effort 或软预算风险：使用 `INLINE`，不创建任务。
