@@ -9,6 +9,8 @@
 1. 委派前生成 capsule 并创建执行任务。
 2. 用户执行 `/compact` 后进行一次最终验收。
 
+本模式只控制旧主任务上下文成本，不是执行任务的外部费用熔断。运行面没有硬预算或中断能力时，创建任务前仍需用户明确接受 capsule 中的软限制。
+
 ## 创建后暂停
 
 创建执行任务后，不调用等待或读取工具。立即输出：
@@ -20,7 +22,9 @@ THREAD_ID: 正式 threadId；尚未生成时记录 CLIENT_THREAD_ID
 HOST_ID: 创建响应中的 host
 PROJECT_ROOT: 共享检出目录
 BASE_COMMIT: 委派前提交
-FILE_BOUNDARIES: 授权边界
+TASK_KIND: READ_ONLY | WRITE
+READ_BOUNDARIES: 读取边界
+WRITE_BOUNDARIES: 写边界；只读任务为 NONE
 ACCEPTANCE: 验收条件摘要
 CURSOR: 尚无时写 NONE
 NEXT_ACTION: 用户执行 /compact，之后明确要求继续验收
@@ -50,11 +54,13 @@ checkpoint 不超过 30 行。不要重复 capsule、日志或方案讨论。
 
 先用一次批量只读检查确认：
 
-- `COMMIT_ID` 存在并位于当前共享分支。
 - 工作区没有执行任务遗留的未提交修改。
-- 修改文件未越过 `FILE_BOUNDARIES`。
+- 读取未越过 `READ_BOUNDARIES`。
+- 写入未越过 `WRITE_BOUNDARIES`。
 - 必需检查已运行。
 - `TOOLING_GAP` 不影响安全和验收。
+
+`TASK_KIND: READ_ONLY` 时确认没有文件修改、`git add` 或新提交。`TASK_KIND: WRITE` 时确认 `COMMIT_ID` 存在并位于当前共享分支。
 
 高风险任务再检查完整提交差异和相关集成行为。不要重跑执行任务全部命令；只补关键证据。
 
@@ -73,8 +79,10 @@ checkpoint 不超过 30 行。不要重复 capsule、日志或方案讨论。
 REVIEW_CAPSULE
 PROJECT_ROOT: 共享检出目录
 BASE_COMMIT: 委派前提交
-COMMIT_ID: 执行任务提交
-FILE_BOUNDARIES: 授权边界
+TASK_KIND: READ_ONLY | WRITE
+COMMIT_ID: WRITE 任务提交；READ_ONLY 为 NONE
+READ_BOUNDARIES: 读取边界
+WRITE_BOUNDARIES: 写边界；只读任务为 NONE
 ACCEPTANCE: 验收条件
 CHECKS: 必需检查
 RISK: 高风险原因
@@ -87,7 +95,7 @@ RISK: 高风险原因
 成功时只报告：
 
 - 验收结论。
-- `COMMIT_ID`。
+- 写任务的 `COMMIT_ID`；只读任务省略。
 - 关键检查。
 - 剩余风险和未验证项。
 

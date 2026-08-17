@@ -25,7 +25,7 @@
     {
       "name": "model-delegate",
       "category": "models-and-routing",
-      "description": "Low-context Codex task delegation with one-way handoff and optional compacted review",
+      "description": "Low-context Codex delegation with explicit model selection, read/write contracts, and fail-closed budget controls",
       "files": [
         "SKILL.md",
         "references/compact-coordinator.md"

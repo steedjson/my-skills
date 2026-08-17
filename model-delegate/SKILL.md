@@ -1,6 +1,6 @@
 ---
 name: model-delegate
-description: 为 Codex 建立低上下文成本的任务分工。用于把已确认、边界清楚的实现交给新的 Codex App 顶层任务，默认单向交接并结束旧主任务；只读工作默认留在当前任务，高风险工作可选压缩后协调验收。
+description: 为 Codex 建立低上下文成本的任务分工。用于把已确认、边界清楚的工作交给新的 Codex App 顶层任务，默认单向交接并结束旧主任务；明确区分只读和写任务，并在运行面缺少硬费用熔断时先取得软预算风险确认。
 ---
 
 # 模型委派
@@ -14,7 +14,7 @@ description: 为 Codex 建立低上下文成本的任务分工。用于把已确
 | 模式 | 适用范围 | 默认行为 |
 |---|---|---|
 | `INLINE` | 计划、方案整理、普通审计、信息收集、小修正 | 当前任务直接完成，不创建任务 |
-| `HANDOFF` | 已确认、边界清楚的低风险或中风险实现 | 创建一个全新执行任务，旧主任务立即结束 |
+| `HANDOFF` | 已确认、边界清楚的低风险或中风险工作 | 用户确认模型、effort 和软预算风险后创建新任务；旧主任务立即结束 |
 | `COMPACT_COORDINATOR` | 数据库迁移、数据修复、认证授权、租户隔离、生产配置、并发、公共接口、不可逆操作，或用户明确要求独立验收 | 创建执行任务；旧主任务先暂停，用户执行 `/compact` 后最多恢复一次验收 |
 
 默认优先级：`INLINE` > `HANDOFF` > `COMPACT_COORDINATOR`。不要因工具可用而委派。用户显式要求只读委派时使用 `HANDOFF`，仍保持单任务。
@@ -32,6 +32,8 @@ description: 为 Codex 建立低上下文成本的任务分工。用于把已确
 - 不使用子智能体协议、独立 `codex exec`、脚本编排、共享状态文件或高频轮询。
 - 执行任务不得再创建任务，不得扩大范围。
 - `create_thread` 没有硬 token budget 参数；不要声称已设置 token 上限。
+- 当前 `create_thread` 未暴露工具调用数、运行时长、累计上下文、费用上限或任务中断参数。没有这些运行时能力时，任何提示词预算都只是软限制。
+- 用户未明确接受软预算风险时，不创建 `HANDOFF` 或 `COMPACT_COORDINATOR` 任务；使用 `INLINE`。
 
 ## 与 grill-me 联动
 
@@ -56,10 +58,10 @@ description: 为 Codex 建立低上下文成本的任务分工。用于把已确
 
 ## 模型选择
 
-- 用户明确指定规范模型名和 reasoning effort：按当前 `create_thread` 接受的组合传入。
-- 用户未指定：省略 `model` 和 `thinking`，使用用户配置的运行时默认值。
-- 用户要求选择，或指定组合被拒绝：列出当前 `create_thread` 明确接受的全部规范模型和 effort。
-- `max` 或 `ultra` 只在用户显式指定时使用；不得因任务复杂而自动提高。
+- 每次委派都要求用户明确确认规范模型名和 reasoning effort。未确认时停止，不调用 `create_thread`。
+- 列出当前 `create_thread` 明确接受的全部规范模型和 effort；不得依赖用户配置的默认模型。
+- 创建任务时必须显式传入已确认的 `model` 和 `thinking`，使后续默认配置变化不会改变本次任务。
+- `max` 或 `ultra` 只在用户明确选择时使用；不得推荐为默认值，不得因任务复杂而自动提高。
 - 不使用 provider 路由后缀、显示名或历史记录猜测模型。
 
 ## 交接包
@@ -69,27 +71,41 @@ description: 为 Codex 建立低上下文成本的任务分工。用于把已确
 ```text
 DELEGATION_CAPSULE
 MODE: HANDOFF | COMPACT_COORDINATOR
+TASK_KIND: READ_ONLY | WRITE
 ROLE: Standalone bounded execution task; report directly to user
 DELEGATION_KEY: 唯一标识
 PROJECT_ROOT: 共享主项目检出目录
 BASE_COMMIT: 委派前提交
+MODEL_AND_THINKING: 用户明确确认的规范模型和 reasoning effort
 SCOPE: 唯一目标
 INPUTS: 已确认的最小事实
 ACCEPTANCE: 可执行验收条件
-FILE_BOUNDARIES: 允许读取和修改的文件
+READ_BOUNDARIES: 允许读取的文件或目录
+WRITE_BOUNDARIES: WRITE 允许修改的文件；READ_ONLY 必须为 NONE
 PROJECT_RULES: 规则读取顺序
 PROJECT_TOOLING: 仅列本任务需要的工具及 REQUIRED 状态
 CHECKS: 必须运行的检查
 POST_COMMIT_ACTIONS: 明确存在的收尾动作
-COST_BUDGET:
+COST_CONTROL:
+  ENFORCEMENT: SOFT
+  USER_ACCEPTED_SOFT_LIMITS: YES
   MAX_DELEGATED_TASKS: 1
   MAX_BROAD_DISCOVERY_PASSES: 1
+  MAX_TOOL_CALLS: 12
+  MAX_ITEMS_PER_BATCH: 4
+  MAX_ELAPSED_MINUTES: 20
+  MAX_RETRIES_PER_COMMAND: 1
   MAX_REPORT_LINES: 20
-  STOP_RULE: 超出范围或预算时立即返回 BLOCKED 或 BUDGET_EXHAUSTED
+  HARD_LIMITS_UNAVAILABLE: token、累计上下文、费用和外部中断
+  STOP_RULE: 达到任一软限制时立即返回 SOFT_BUDGET_EXHAUSTED
 CONSTRAINTS: local、无 worktree、无范围扩展、无破坏性操作
 ```
 
-`FILE_BOUNDARIES` 是硬边界。业务逻辑、架构、权限、数据范围或公共接口未在 capsule 明确授权时，执行任务必须停止。
+`READ_BOUNDARIES` 和 `WRITE_BOUNDARIES` 是硬边界。业务逻辑、架构、权限、数据范围或公共接口未在 capsule 明确授权时，执行任务必须停止。
+
+只有运行面实际提供并启用 token、费用、工具调用、时长上限或外部中断能力时，才可把 `ENFORCEMENT` 写为 `HARD`，并记录具体工具参数和验证证据。不得把模型自报停止当作硬熔断。
+
+`MAX_TOOL_CALLS` 按底层工具调用计数；批量或并行包装中的每个子调用分别计数，不得把几十个子调用算作一次。单次批量最多包含 `MAX_ITEMS_PER_BATCH` 个子调用。
 
 ## HANDOFF
 
@@ -105,8 +121,9 @@ CONSTRAINTS: local、无 worktree、无范围扩展、无破坏性操作
 
 - 先验证 `PROJECT_ROOT`、`BASE_COMMIT`、项目规则和工作区状态。
 - 使用索引、定向读取或批量工具获取最小上下文；最多一次广域发现。
-- 只修改 `FILE_BOUNDARIES` 内文件。
-- 运行约定检查；完成前 `git add` 预期文件并提交，返回 `COMMIT_ID`。
+- `TASK_KIND: READ_ONLY` 时不得修改文件、运行写操作、`git add` 或提交；报告省略 `COMMIT_ID`。
+- `TASK_KIND: WRITE` 时只修改 `WRITE_BOUNDARIES` 内文件；运行约定检查，完成前 `git add` 预期文件并提交，返回 `COMMIT_ID`。
+- 每次工具调用前更新软预算计数；达到任一软限制时停止并返回 `SOFT_BUDGET_EXHAUSTED`。
 - 低风险和中风险任务自行完成差异审查及验收。
 - 遇到阻塞或预算不足时在执行任务中直接向用户报告，不唤醒旧主任务。
 
@@ -137,8 +154,9 @@ CONSTRAINTS: local、无 worktree、无范围扩展、无破坏性操作
 报告不超过 20 行：
 
 ```text
-STATUS: COMPLETE | BLOCKED | BUDGET_EXHAUSTED
+STATUS: COMPLETE | BLOCKED | SOFT_BUDGET_EXHAUSTED
 DELEGATION_KEY: 原样回显
+TASK_KIND: READ_ONLY | WRITE
 RESULT: 完成内容
 COMMIT_ID: 写任务提交；只读任务省略
 FILES: 修改或检查的文件
@@ -155,5 +173,7 @@ RISKS: 未验证项
 - `create_thread` 不可用：输出 capsule，让用户用 `/task` 创建新任务；不得改用 `/fork`。
 - 必需工具缺失：返回 `TOOLING_GAP`；影响安全或验收时停止。
 - 发现范围扩展：返回 `BLOCKED`，不自动增加任务。
-- 预计超出预算：返回 `BUDGET_EXHAUSTED`，不自动提高 effort、续派或创建替代任务。
+- 用户未确认模型、effort 或软预算风险：使用 `INLINE`，不创建任务。
+- 达到软预算：返回 `SOFT_BUDGET_EXHAUSTED`，不自动提高 effort、续派或创建替代任务。
+- 用户要求硬费用上限，但运行面没有硬限制或中断能力：返回 `HARD_BUDGET_UNAVAILABLE`，不创建任务。
 - 静态技能校验不证明真实任务生命周期；未经用户明确批准，不运行高成本委派 E2E。
