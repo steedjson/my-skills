@@ -57,6 +57,21 @@
       ]
     },
     {
+      "name": "browser-ui-reader",
+      "category": "browser-and-ui",
+      "description": "看本地浏览器页面内容、操作浏览器页面（agent-browser CDP 为主，AppleScript JS 注入为零配置后备）、逐页爬取 JS SPA 原型、批量下载页面图片与宽图分段，把 UI 设计图转化为结构化需求清单",
+      "files": [
+        "SKILL.md",
+        "scripts/chrome_tabs.sh",
+        "scripts/chrome_eval.sh",
+        "scripts/asset_download.sh",
+        "scripts/wide_crop.py",
+        "references/agent-browser-recipes.md",
+        "references/spa-crawl-recipes.md",
+        "references/ui-requirements-template.md"
+      ]
+    },
+    {
       "name": "ln-install-skill",
       "category": "skill-management",
       "description": "Install, list, verify, or uninstall agent skills via symlinks between a local source directory and any host skills directory — DSH, Claude Code, pi, cross-tool, or project-local (default SRC ~/.cc-switch/skills, DST user-specified or auto-probed)",
