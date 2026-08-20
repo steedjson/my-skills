@@ -59,7 +59,7 @@
     {
       "name": "ln-install-skill",
       "category": "skill-management",
-      "description": "Install, list, verify, or uninstall DSH agent skills via symlinks from a local source skills directory (default ~/.cc-switch/skills) into a target skills directory (default ~/.dsh/skills)",
+      "description": "Install, list, verify, or uninstall agent skills via symlinks between a local source directory and any host skills directory — DSH, Claude Code, pi, cross-tool, or project-local (default SRC ~/.cc-switch/skills, DST user-specified or auto-probed)",
       "files": [
         "SKILL.md"
       ]

@@ -43,7 +43,7 @@
 
 #### [ln-install-skill](./ln-install-skill/)
 
-用符号链接把本地 skills 目录（默认 `~/.cc-switch/skills`）中的 Skill 安装、列出、校验或卸载到 DSH skills 目录（默认 `~/.dsh/skills`；跨工具场景用 `~/.agents/skills`）。只操作 symlink，永远不碰源目录和源 `SKILL.md`，安装与卸载均可逆。
+用符号链接把本地 skills 目录（默认 `~/.cc-switch/skills`）中的 Skill 安装、列出、校验或卸载到任意宿主 skills 目录：DSH（`~/.dsh/skills`）、Claude Code（`~/.claude/skills`）、pi（`~/.pi/agent/skills`）、跨工具（`~/.agents/skills`），或项目内 `<repo>/.claude/skills` / `<repo>/.agents/skills`。目标目录按「用户指定 → 项目级 → 探测首个存在」解析，支持一次装到所有宿主。只操作 symlink，永远不碰源目录和源 `SKILL.md`，安装与卸载均可逆。
 
 ## Codex 插件
 
