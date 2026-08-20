@@ -76,7 +76,7 @@ For an installed skill at `DST/<skill>`:
 2. `readlink "DST/<skill>"` → `target`. `test -d "$target"` — the link must resolve to an existing directory.
 3. `test -f "$target/SKILL.md"` — the host reads this file. Missing → "skill will not be recognized by the host".
 4. Parse the `SKILL.md` YAML frontmatter (the `---`-delimited block at the top). Report the `name` and `description`. If `name` or `description` is missing, warn (hosts need both).
-5. **Collision check**: scan other entries in `DST` for a `SKILL.md` frontmatter `name` equal to this skill's. Collision → warn: the host may resolve the two nondeterministically.
+5. **Collision check**: scan other entries in `DST` for a `SKILL.md` frontmatter `name` equal to this skill's. Collision → warn: the host may resolve the two nondeterministically. Compare with `realpath` — `DST` entries are symlinks and `normpath` keeps link-path text, which false-flags the skill's own link as a collision (see buglog `bug-002`).
 6. Report whether the link was created from `SRC` (the configured source) or elsewhere.
 
 ### 4. Uninstall (`uninstall <skill>`)
