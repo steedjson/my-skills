@@ -39,6 +39,12 @@
 
 在任意 Django 后端项目中发现并遵循现有约定，完成实现、调试、审查或审计。覆盖原生 Django、Django REST Framework、Django Ninja，以及 API、Service/用例、模型、迁移、Admin、Form、后台任务、信号、管理命令、设置和测试。
 
+### Skill 管理（skill-management）
+
+#### [ln-install-skill](./ln-install-skill/)
+
+用符号链接把本地 skills 目录（默认 `~/.cc-switch/skills`）中的 Skill 安装、列出、校验或卸载到 DSH skills 目录（默认 `~/.dsh/skills`；跨工具场景用 `~/.agents/skills`）。只操作 symlink，永远不碰源目录和源 `SKILL.md`，安装与卸载均可逆。
+
 ## Codex 插件
 
 `plugins/` 存放需要构建、测试、安装和显式信任 hook 的 Codex 插件运行时。插件不是独立 Agent Skill，不登记到 `skills.json`。仓库插件目录为 `.agents/plugins/marketplace.json`。
@@ -69,6 +75,9 @@ cp -R model-delegate/. ~/.claude/skills/model-delegate/
 
 mkdir -p ~/.claude/skills/custom-image-gen
 cp -R custom-image-gen/. ~/.claude/skills/custom-image-gen/
+
+mkdir -p ~/.claude/skills/ln-install-skill
+cp ln-install-skill/SKILL.md ~/.claude/skills/ln-install-skill/SKILL.md
 ```
 
 `openwolf-codegraph-bridge` 无构建步骤：
@@ -131,6 +140,12 @@ my-skills/
 ├── django-development/
 │   ├── SKILL.md
 │   └── agents/openai.yaml
+├── ccs-restore-efforts/
+│   ├── SKILL.md
+│   ├── scripts/
+│   └── tests/
+├── ln-install-skill/
+│   └── SKILL.md
 ├── plugins/
 │   └── openwolf-codegraph-bridge/
 │       ├── .codex-plugin/plugin.json

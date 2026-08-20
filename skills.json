@@ -55,6 +55,14 @@
         "SKILL.md",
         "agents/openai.yaml"
       ]
+    },
+    {
+      "name": "ln-install-skill",
+      "category": "skill-management",
+      "description": "Install, list, verify, or uninstall DSH agent skills via symlinks from a local source skills directory (default ~/.cc-switch/skills) into a target skills directory (default ~/.dsh/skills)",
+      "files": [
+        "SKILL.md"
+      ]
     }
   ]
 }
