@@ -27,6 +27,10 @@
 
 当 CC Switch 同步模型目录或重写 `config.toml` 后，模型依赖的 `Effort` 和 `Speed` 元数据可能回归。运行 `scripts/restore_efforts.py restore-ui` 会按 Codex Auto Review、DeepSeek V4、Grok 4.5/4.6 与 GPT-5.6/5.5/5.4/5.4-mini/5.2 官方档位、上下文和输出上限收敛，并给其他模型补回通用推理档位、`Fast / priority` 速度档位及丢失的 `model` 行。
 
+#### [grok-build-cli](./grok-build-cli/)
+
+让 Codex 调用本机 `grok` CLI：检查可用模型与凭据、选择单轮或 agentic 调用、轮询长任务并返回结果。只覆盖调用机制，不规定任务内容。凭据可以是 `~/.grok/config.toml` 模型 key、已缓存的 `auth.json`，或环境变量 `XAI_API_KEY`；不必先 `grok login`。源： [Pluviobyte/rnskill](https://github.com/Pluviobyte/rnskill/tree/main/skills/grok-build-cli)，可用性检查已按官方认证方式放宽。
+
 ### 媒体生成（media-generation）
 
 #### [custom-image-gen](./custom-image-gen/)
@@ -84,6 +88,9 @@ cp -R custom-image-gen/. ~/.claude/skills/custom-image-gen/
 
 mkdir -p ~/.claude/skills/ln-install-skill
 cp ln-install-skill/SKILL.md ~/.claude/skills/ln-install-skill/SKILL.md
+
+mkdir -p ~/.claude/skills/grok-build-cli
+cp -R grok-build-cli/. ~/.claude/skills/grok-build-cli/
 ```
 
 `openwolf-codegraph-bridge` 无构建步骤：
@@ -156,6 +163,9 @@ my-skills/
 │   └── references/
 ├── ln-install-skill/
 │   └── SKILL.md
+├── grok-build-cli/
+│   ├── SKILL.md
+│   └── agents/openai.yaml
 ├── plugins/
 │   └── openwolf-codegraph-bridge/
 │       ├── .codex-plugin/plugin.json

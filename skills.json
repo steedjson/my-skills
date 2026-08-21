@@ -39,6 +39,15 @@
       ]
     },
     {
+      "name": "grok-build-cli",
+      "category": "models-and-routing",
+      "description": "Invoke the locally installed Grok Build CLI from Codex and return Grok's response",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml"
+      ]
+    },
+    {
       "name": "custom-image-gen",
       "category": "media-generation",
       "description": "通过自定义 Codex 凭据和端点复用系统 Image Gen 工作流",
