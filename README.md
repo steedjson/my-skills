@@ -43,6 +43,12 @@
 
 在任意 Django 后端项目中发现并遵循现有约定，完成实现、调试、审查或审计。覆盖原生 Django、Django REST Framework、Django Ninja，以及 API、Service/用例、模型、迁移、Admin、Form、后台任务、信号、管理命令、设置和测试。
 
+### 代码质量（code-quality）
+
+#### [thermo-nuclear-code-quality-review](./thermo-nuclear-code-quality-review/)
+
+对代码变更执行极严格的可维护性审查：抽象边界、超大文件、分支复杂度、重复逻辑和结构性简化机会。适合明确要求深度或严苛代码质量审查的场景；不替代功能正确性、安全性或测试审查。
+
 ### 浏览器与 UI（browser-and-ui）
 
 #### [browser-ui-reader](./browser-ui-reader/)
