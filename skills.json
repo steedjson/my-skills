@@ -66,6 +66,15 @@
       ]
     },
     {
+      "name": "django-personal-development",
+      "category": "framework-workflows",
+      "description": "Personal Django development workflow for new projects, legacy changes, and gradual convention migration",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml"
+      ]
+    },
+    {
       "name": "thermo-nuclear-code-quality-review",
       "category": "code-quality",
       "description": "Extremely strict maintainability review for abstraction quality, giant files, and spaghetti-condition growth",

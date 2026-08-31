@@ -1,0 +1,4 @@
+interface:
+  display_name: "个人 Django 开发"
+  short_description: "按个人规范开发、修改和迁移 Django 后端"
+  default_prompt: "使用 $django-personal-development 按个人规范侦察、实现并验证这项 Django 后端任务。"

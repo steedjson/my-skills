@@ -43,6 +43,10 @@
 
 在任意 Django 后端项目中发现并遵循现有约定，完成实现、调试、审查或审计。覆盖原生 Django、Django REST Framework、Django Ninja，以及 API、Service/用例、模型、迁移、Admin、Form、后台任务、信号、管理命令、设置和测试。
 
+#### [django-personal-development](./django-personal-development/)
+
+按个人工程规范处理 Django 新项目、旧项目修改和渐进式规范迁移；以 `sugon-webwork-backend` 作为个人习惯参考项目。
+
 ### 代码质量（code-quality）
 
 #### [thermo-nuclear-code-quality-review](./thermo-nuclear-code-quality-review/)
