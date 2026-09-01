@@ -17,6 +17,10 @@
 
 读取 CodexRadar 当前实测数据与 15 天社区评分历史，为 OpenAI Codex 模型和 reasoning effort 提供质量、速度、成本建议。仅推荐当前有实测数据的组合，支持 Codex、Claude Code 和其他 Agent Skills 兼容宿主。
 
+#### [agent-model-policy-sync](./agent-model-policy-sync/)
+
+把子智能体模型与 reasoning effort 策略幂等写入项目 `AGENTS.md` 或用户指定的 Agent 指令文件；支持 dry-run、标记区块更新和路径安全检查。
+
 #### [model-delegate](./model-delegate/)
 
 使用 Codex 原生子智能体和 App 顶层任务建立自动压缩感知的低上下文成本分工。`CONTEXT_GATE` 按 40%/55%/70%/85% 分层选择双轮、单轮、交接或压缩 checkpoint，并校验有效窗口、自动压缩阈值、样本新鲜度和安全余量。核心不依赖特定供应商或计费数据库。

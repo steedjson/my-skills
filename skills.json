@@ -113,6 +113,15 @@
       "files": [
         "SKILL.md"
       ]
+    },
+    {
+      "name": "agent-model-policy-sync",
+      "category": "models-and-routing",
+      "description": "同步项目级子智能体模型与 reasoning effort 策略到 AGENTS.md 或用户指定的 Agent 指令文件，支持幂等更新、预览和安全路径检查",
+      "files": [
+        "SKILL.md",
+        "scripts/sync_policy.py"
+      ]
     }
   ]
 }
