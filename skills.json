@@ -75,6 +75,15 @@
       ]
     },
     {
+      "name": "coding-discipline",
+      "category": "code-quality",
+      "description": "Concise, evidence-driven engineering workflow for minimal changes, explicit tradeoffs, root-cause fixes, and proportional verification",
+      "files": [
+        "SKILL.md",
+        "references/behavior-prompts.md"
+      ]
+    },
+    {
       "name": "thermo-nuclear-code-quality-review",
       "category": "code-quality",
       "description": "Extremely strict maintainability review for abstraction quality, giant files, and spaghetti-condition growth",
