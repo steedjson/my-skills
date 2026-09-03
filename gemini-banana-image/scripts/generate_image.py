@@ -194,7 +194,11 @@ def main():
     )
     parser.add_argument(
         "--filename", "-f",
-        help="Output filename (defaults to ./gemini-image-YYYYMMDD-HHMMSS.png)"
+        help="Output filename (e.g. cat.png or /path/to/custom.png). Bare filenames save into system temp dir."
+    )
+    parser.add_argument(
+        "--output-dir", "-o",
+        help="Custom output directory (defaults to system temporary directory: <TEMP>/gemini-banana)"
     )
     parser.add_argument(
         "--input-image", "-i",
@@ -249,6 +253,8 @@ def main():
     )
 
     if args.show_config:
+        import tempfile
+        default_out_dir = Path(args.output_dir).expanduser() if args.output_dir else Path(tempfile.gettempdir()) / "gemini-banana"
         mode = f"Custom Proxy ({base_url})" if base_url else "Official Google GenAI Endpoint"
         print("=== Gemini Banana Image Configuration ===")
         print(f"Mode:         {mode}")
@@ -256,6 +262,7 @@ def main():
         print(f"API Key:      {mask_key(api_key)}")
         print(f"Model:        {model}")
         print(f"Config Source: {source}")
+        print(f"Output Dir:   {default_out_dir}")
         print(f"Resolution:   {args.resolution}")
         if args.aspect_ratio:
             print(f"Aspect Ratio: {args.aspect_ratio}")
@@ -292,6 +299,7 @@ def main():
     from PIL import Image as PILImage
     import io
     import base64
+    import tempfile
 
     # Initialise client with custom base_url if present
     client_kwargs = {"api_key": api_key}
@@ -303,12 +311,26 @@ def main():
 
     client = genai.Client(**client_kwargs)
 
+    # Determine output directory (default: system temp directory to keep user repo clean)
+    if args.output_dir:
+        target_dir = Path(args.output_dir).expanduser()
+    else:
+        target_dir = Path(tempfile.gettempdir()) / "gemini-banana"
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+
     # Determine output filename
     if args.filename:
-        output_path = Path(args.filename)
+        user_path = Path(args.filename).expanduser()
+        if user_path.is_absolute():
+            output_path = user_path
+        elif len(user_path.parts) > 1:
+            output_path = user_path.resolve()
+        else:
+            output_path = target_dir / user_path.name
     else:
         timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        output_path = Path(f"gemini-image-{timestamp}.png")
+        output_path = target_dir / f"gemini-image-{timestamp}.png"
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

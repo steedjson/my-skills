@@ -86,7 +86,8 @@ uv run {baseDir}/scripts/generate_image.py --base-url "https://api.custom-proxy.
 | 参数 | 缩写 | 默认值 | 说明 |
 |---|---|---|---|
 | `--prompt` | `-p` | (必填) | 图像描述提示词或编辑指令 |
-| `--filename` | `-f` | 自动生成时间戳文件 | 输出 PNG 文件路径 |
+| `--filename` | `-f` | 时间戳命名的 PNG | 输出文件名（裸文件名自动存入临时目录，也可填绝对路径） |
+| `--output-dir`| `-o` | `<TEMP>/gemini-banana` | 输出目录，默认采用系统临时目录避免污染代码库 |
 | `--input-image` | `-i` | None | 输入图片路径（用于图生图编辑） |
 | `--resolution` | `-r` | `1K` | 分辨率：`1K`、`2K`、`4K` |
 | `--aspect-ratio`| `-a` | None | 比例：`1:1`、`16:9`、`9:16`、`4:3`、`3:4` |
@@ -99,6 +100,5 @@ uv run {baseDir}/scripts/generate_image.py --base-url "https://api.custom-proxy.
 
 ## 产出规范
 
-- 图片直接保存在用户指定的路径或当前目录下。
-- 脚本成功执行后输出包含绝对路径的确认信息：`Image successfully generated and saved: <path>`。
-- Agent 在生成完成后应直接向用户反馈生成文件的路径和状态，按需使用图片查看工具或展示结果。
+- **临时目录存储**：默认保存至系统临时文件夹（macOS/Linux 为 `/tmp/gemini-banana/` 或 `$TMPDIR/gemini-banana/`，Windows 为 `%TEMP%\gemini-banana\`），绝不污染当前代码仓库或工作目录。
+- **用户提示与下载**：脚本执行完毕后输出生成的绝对路径（如 `Image successfully generated and saved: /tmp/gemini-banana/...`），Agent 应向用户提供清晰的 Markdown 文件链接，方便用户直接点击预览或下载另存。
