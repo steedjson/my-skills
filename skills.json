@@ -57,6 +57,17 @@
       ]
     },
     {
+      "name": "gemini-banana-image",
+      "category": "media-generation",
+      "description": "使用 Google Gemini 图像模型（Gemini 3 Pro Image / Nano Banana Pro）文生图与图生图，支持自定义 base_url 与 key 中转并自动回退官方端点",
+      "files": [
+        "SKILL.md",
+        "scripts/generate_image.py",
+        "references/config-guide.md",
+        "tests/test_config.py"
+      ]
+    },
+    {
       "name": "django-development",
       "category": "framework-workflows",
       "description": "Discovery-first Django backend workflow for native Django, DRF, and Ninja projects",

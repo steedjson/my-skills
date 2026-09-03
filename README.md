@@ -41,6 +41,10 @@
 
 通过 `image_auth.json` 和当前 Codex provider 配置解析自定义图片生成端点与凭据（Key 缺失时回退 `auth.json` 的 `OPENAI_API_KEY`），再复用系统 `imagegen` Skill 和 CLI。仅负责 provider 适配，不复制系统图片生成工作流。
 
+#### [gemini-banana-image](./gemini-banana-image/)
+
+使用 Google Gemini 图像模型（`gemini-3-pro-image-preview` / Nano Banana Pro）文生图与图生图。支持多层级配置解析：优先读取自定义中转端点（`base_url` 与 `api_key`），无配置或指定 `--official` 时自动回退 Google 官方端点；支持 1K/2K/4K 分辨率、多种画幅比例以及 Thinking 链流式结果提取。
+
 ### 框架工作流（framework-workflows）
 
 #### [django-development](./django-development/)
