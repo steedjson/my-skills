@@ -1,11 +1,11 @@
 ---
 name: gemini-banana-image
-description: 使用 Google Gemini 图像模型（Gemini 3 Pro Image / Nano Banana Pro / Imagen 3）生成与编辑图片。支持双通道智能路由：有自定义 base_url 与 key 时自动走中转/自建代理，无自定义配置或指定官方时自动回退 Google 官方端点。适用于文生图、图生图编辑、自定义端点生图等场景。
+description: 使用 Google Gemini 图像模型（默认 gemini-3.1-flash-image，支持 Gemini 3 Pro Image / Nano Banana Pro / Imagen 3）生成与编辑图片。支持双通道智能路由：有自定义 base_url 与 key 时自动走中转/自建代理，无自定义配置或指定官方时自动回退 Google 官方端点。适用于文生图、图生图编辑、自定义端点生图等场景。
 ---
 
 # Gemini Banana Image
 
-使用 Google Gemini 图像模型（如 `gemini-3-pro-image-preview` / Nano Banana Pro）进行高质量 AI 图片生成与编辑。具备自定义中转端点（OneAPI / NewAPI / 自建反代）与 Google 官方端点之间的无缝自适应路由。
+使用 Google Gemini 图像模型（默认 `gemini-3.1-flash-image`，亦支持 `gemini-3-pro-image-preview` / Nano Banana Pro）进行高质量 AI 图片生成与编辑。具备自定义中转端点（OneAPI / NewAPI / 自建反代）与 Google 官方端点之间的无缝自适应路由。
 
 ## 核心特性
 
@@ -91,7 +91,7 @@ uv run {baseDir}/scripts/generate_image.py --base-url "https://api.custom-proxy.
 | `--input-image` | `-i` | None | 输入图片路径（用于图生图编辑） |
 | `--resolution` | `-r` | `1K` | 分辨率：`1K`、`2K`、`4K` |
 | `--aspect-ratio`| `-a` | None | 比例：`1:1`、`16:9`、`9:16`、`4:3`、`3:4` |
-| `--model` | `-m` | `gemini-3-pro-image-preview` | 模型名称 |
+| `--model` | `-m` | `gemini-3.1-flash-image` | 模型名称（亦可指定 `gemini-3-pro-image-preview` 等） |
 | `--base-url` | | 自动检测 | 自定义 API Base URL |
 | `--official` | | False | 强制使用 Google 官方直连端点 |
 | `--api-key` | `-k` | 自动检测 | API 密钥 |

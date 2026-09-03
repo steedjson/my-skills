@@ -59,7 +59,7 @@
     {
       "name": "gemini-banana-image",
       "category": "media-generation",
-      "description": "使用 Google Gemini 图像模型（Gemini 3 Pro Image / Nano Banana Pro）文生图与图生图，支持自定义 base_url 与 key 中转并自动回退官方端点",
+      "description": "使用 Google Gemini 图像模型（默认 gemini-3.1-flash-image，支持 Gemini 3 Pro Image / Nano Banana Pro）文生图与图生图，支持自定义 base_url 与 key 中转并自动回退官方端点",
       "files": [
         "SKILL.md",
         "scripts/generate_image.py",

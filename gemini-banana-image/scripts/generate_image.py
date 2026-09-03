@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 
-DEFAULT_MODEL = "gemini-3-pro-image-preview"
+DEFAULT_MODEL = "gemini-3.1-flash-image"
 DEFAULT_RESOLUTION = "1K"
 
 

@@ -30,7 +30,7 @@ cat > ~/.config/gemini-banana/config.json << 'EOF'
 {
   "base_url": "https://api.your-oneapi.com",
   "api_key": "sk-your-oneapi-token",
-  "model": "gemini-3-pro-image-preview",
+  "model": "gemini-3.1-flash-image",
   "resolution": "2K"
 }
 EOF
