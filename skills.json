@@ -68,6 +68,17 @@
       ]
     },
     {
+      "name": "grok-image",
+      "category": "media-generation",
+      "description": "使用 xAI Grok 图像模型（默认 grok-imagine-image）文生图，支持自定义 base_url 与 key 中转并自动回退官方端点，自动兼容 ~/.grok/config.toml 与 ~/.config/grok-image/config.json",
+      "files": [
+        "SKILL.md",
+        "scripts/generate_image.py",
+        "references/config-guide.md",
+        "tests/test_config.py"
+      ]
+    },
+    {
       "name": "django-development",
       "category": "framework-workflows",
       "description": "Discovery-first Django backend workflow for native Django, DRF, and Ninja projects",
