@@ -49,7 +49,15 @@
 
 使用 xAI Grok 图像模型（默认 `grok-imagine-image`，亦支持 `grok-2-image`）文生图。支持多层级配置解析：优先读取自定义中转端点（`base_url` 与 `api_key`），自动兼容本地既有 `~/.grok/config.toml` 配置与 `~/.config/grok-image/config.json`，无配置或指定 `--official` 时自动回退 xAI 官方端点；支持 Base64 / URL 双重响应解码。默认存储于系统临时目录避免污染代码库。
 
+#### [candid-character-image-prompts](./candid-character-image-prompts/)
+
+生成成年虚构角色的偷拍感 COS / 角色摄影图片提示词：公共日常场景、隐蔽机位、长焦或手机抓拍、不完美构图，支持 `n=10` 十种独立构图。
+
 ### 框架工作流（framework-workflows）
+
+#### [yapi-copilot](./yapi-copilot/)
+
+基于 YApi 官方原生 REST API 自动化维护接口文档（分类、接口契约、JSON-Schema 增量合入），替代脆弱易错的浏览器网页点选。内置 macOS Chrome 本地已登录 Cookie 自动解密，支持零配置免手动抓包鉴权。
 
 #### [django-development](./django-development/)
 

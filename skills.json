@@ -144,6 +144,25 @@
         "SKILL.md",
         "scripts/sync_policy.py"
       ]
+    },
+    {
+      "name": "candid-character-image-prompts",
+      "category": "media-generation",
+      "description": "生成成年虚构角色的偷拍感 COS / 角色摄影图片提示词，支持日常公共场景、隐蔽机位、长焦或手机抓拍，以及 n=10 多构图模式",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "yapi-copilot",
+      "category": "framework-workflows",
+      "description": "Manage and sync YApi interface documents (categories, APIs, JSON-Schema request/response contracts) directly via YApi REST APIs with zero UI clicking and automated local Chrome cookie or token authentication",
+      "files": [
+        "SKILL.md",
+        "scripts/yapi_client.py",
+        "references/yapi-api-routes.md",
+        "tests/test_yapi_client.py"
+      ]
     }
   ]
 }
